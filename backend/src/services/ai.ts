@@ -1,13 +1,48 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { env } from '../config/env'
-
-const client = new Anthropic({ apiKey: env.anthropicKey })
-
-// ── Signal Extraction ─────────────────────────────────────────────────────────
-
+const anthropic = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+const SIGNAL_EXTRACTION_SYSTEM_PROMPT = `You are a clinical data extraction specialist working for a hospital discharge monitoring system.
+Given a raw hospital discharge note or EMR text, extract a structured care plan.
+Be conservative — if you are not certain about a value, lower its confidence score.
+Never invent or assume information not present in the source text.
+Return ONLY valid JSON with exactly this structure:
+{
+  "patientSummary": "<max 120 words, plain language, 5th-grade reading level, address patient as 'you'>",
+  "diagnosis": "<primary diagnosis string>",
+  "overallConfidence": <0.0–1.0>,
+  "medications": [
+    { "name": "string", "dose": "string or '—'", "frequency": "string or '—'",
+      "status": "continued|started|stopped|adjusted", "confidence": 0.0–1.0 }
+  ],
+  "redFlags": ["plain language symptom to watch for"],
+  "monitoringSchedule": [
+    { "question": "friendly check-in question spoken to patient",
+      "frequency": "daily|weekly|as_needed", "time": "HH:MM or null" }
+  ]
+}
+If the text is not a medical document, return:
+{ "error": "NOT_MEDICAL_DOCUMENT" }`
+const PATIENT_ANALYSIS_SYSTEM_PROMPT = `You are a compassionate patient monitoring AI for a post-discharge care system.
+Analyze the patient's message against their red-flag symptom list.
+Rules:
+- Red-flag symptom mentioned → riskScore: "red", alertProvider: true
+- Vague concern, no specific flag → riskScore: "yellow", alertProvider: false
+- Positive / adherent message → riskScore: "green", alertProvider: false
+- botResponse: max 80 words, warm, simple English
+- If alertProvider is true, tell the patient their doctor has been notified
+- Never give specific dosage instructions
+Return ONLY valid JSON:
+{
+  "riskScore": "red|yellow|green",
+  "triggeredFlags": ["matched flag description"],
+  "botResponse": "response string",
+  "alertProvider": true|false,
+  "sentiment": "positive|neutral|concerned|alarmed"
+}`
 export interface ExtractedSignal {
   patientSummary: string
   diagnosis: string
+  overallConfidence: number
   medications: Array<{
     name: string
     dose: string
@@ -21,91 +56,40 @@ export interface ExtractedSignal {
     frequency: 'daily' | 'weekly' | 'as_needed'
     time: string | null
   }>
-  confidence: number
 }
-
 export async function extractSignal(rawNotes: string): Promise<ExtractedSignal> {
-  const message = await client.messages.create({
+  const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a clinical AI assistant. Extract structured discharge information from the following EMR notes and return ONLY valid JSON — no markdown, no explanation.
-
-EMR NOTES:
-${rawNotes}
-
-Return this exact JSON shape:
-{
-  "patientSummary": "Plain-language summary for the patient (2-3 sentences, simple language)",
-  "diagnosis": "Primary diagnosis string",
-  "medications": [
-    {
-      "name": "Drug name",
-      "dose": "e.g. 40mg",
-      "frequency": "e.g. Once daily",
-      "status": "continued|started|stopped|adjusted",
-      "confidence": 0.95
-    }
-  ],
-  "redFlags": ["Warning symptom 1", "Warning symptom 2"],
-  "monitoringSchedule": [
-    {
-      "question": "Check-in question to send the patient",
-      "frequency": "daily|weekly|as_needed",
-      "time": "HH:MM or null"
-    }
-  ],
-  "confidence": 0.94
-}`,
-      },
-    ],
+    system: SIGNAL_EXTRACTION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: rawNotes }],
   })
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  return JSON.parse(text) as ExtractedSignal
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const parsed = JSON.parse(text)
+  if (parsed.error === 'NOT_MEDICAL_DOCUMENT') {
+    throw new Error('The provided text does not appear to be a clinical note.')
+  }
+  return parsed
 }
-
-// ── Check-In Risk Analysis ────────────────────────────────────────────────────
-
-export interface RiskAnalysis {
+export interface PatientAnalysis {
   riskScore: 'red' | 'yellow' | 'green'
   triggeredFlags: string[]
   botResponse: string
+  alertProvider: boolean
+  sentiment: 'positive' | 'neutral' | 'concerned' | 'alarmed'
 }
-
-export async function analyzeCheckIn(
-  patientMessage: string,
-  redFlags: string[],
+export async function analyzePatientResponse(
   patientName: string,
-  diagnosis: string
-): Promise<RiskAnalysis> {
-  const message = await client.messages.create({
+  message: string,
+  redFlags: string[]
+): Promise<PatientAnalysis> {
+  const userContent = `Patient name: ${patientName}\nPatient message: "${message}"\nRed flags: ${JSON.stringify(redFlags)}`
+  const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a clinical triage AI. Analyze a patient's check-in message and return ONLY valid JSON.
-
-Patient: ${patientName}
-Diagnosis: ${diagnosis}
-Red flags to watch for: ${redFlags.join(', ')}
-Patient's message: "${patientMessage}"
-
-Return this exact JSON:
-{
-  "riskScore": "red|yellow|green",
-  "triggeredFlags": ["list of triggered red flag strings, or empty array"],
-  "botResponse": "Empathetic WhatsApp reply to the patient in simple English (2-3 sentences)"
-}
-
-Scoring: red = red flag triggered or urgent symptom; yellow = concern or missed dose; green = all well.`,
-      },
-    ],
+    system: PATIENT_ANALYSIS_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userContent }],
   })
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  return JSON.parse(text) as RiskAnalysis
+  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  return JSON.parse(text)
 }

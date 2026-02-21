@@ -1,21 +1,33 @@
-import twilio from 'twilio'
 import { env } from '../config/env'
-
-const client = twilio(env.twilioAccountSid, env.twilioAuthToken)
-
-export async function sendWhatsApp(to: string, body: string): Promise<void> {
-  await client.messages.create({
-    from: env.twilioWhatsappFrom,
-    to: `whatsapp:${to}`,
-    body,
-  })
+import { logger } from '../utils/logger'
+export async function sendWhatsAppMessage(to: string, body: string): Promise<void> {
+  if (env.NODE_ENV === 'production' && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN) {
+    const twilio = await import('twilio')
+    const client = twilio.default(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
+    await client.messages.create({
+      from: env.TWILIO_WHATSAPP_FROM,
+      to: `whatsapp:${to}`,
+      body,
+    })
+    logger.info(`[WhatsApp] Sent to ${to}`)
+  } else {
+    logger.info(`[WhatsApp MOCK] To: ${to}`)
+    logger.info(`[WhatsApp MOCK] Body:\n${body}`)
+  }
 }
-
-export function buildCheckInMessage(
+export function buildDispatchMessage(
   patientName: string,
-  question: string,
-  checkInToken: string
+  hospitalName: string,
+  summary: string,
+  checkInUrl: string,
+  personalNote?: string
 ): string {
-  const baseUrl = process.env.BACKEND_URL || 'http://localhost:4000'
-  return `Good morning ${patientName}! 👋\n\n${question}\n\nReply to this message with your answer.\n\n_CareBridge Sentinel — ${baseUrl}/checkin/${checkInToken}_`
+  let msg = `Good day ${patientName}! This is CareBridge Sentinel — your personal health companion from ${hospitalName}.\n\n`
+  msg += `${summary}\n\n`
+  msg += `📋 You can check in with us daily using this link:\n${checkInUrl}\n`
+  if (personalNote) {
+    msg += `\n💬 Note from your doctor: ${personalNote}\n`
+  }
+  msg += `\nWe are here to support your recovery. 💙`
+  return msg
 }
