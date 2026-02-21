@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
-import { Patient, PatientLanguage, RiskScore, CheckIn, Alert, ClinicalSignal } from '@/types'
-import { MOCK_PATIENTS } from '@/constant/mockPatients'
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { Patient, PatientLanguage, RiskScore, ClinicalSignal } from '@/types'
+import { api } from '@/lib/api'
+import { useAuth } from './AuthContext'
 
 type NewPatientInput = {
   name: string
@@ -12,99 +13,127 @@ type NewPatientInput = {
 
 type PatientsState = {
   patients: Patient[]
+  loading: boolean
+  refreshPatients: () => Promise<void>
   getPatient: (id: string) => Patient | undefined
-  addPatient: (input: NewPatientInput) => string
-  updateRiskScore: (patientId: string, score: RiskScore) => void
-  addCheckIn: (patientId: string, checkIn: CheckIn) => void
-  addAlert: (patientId: string, alert: Alert) => void
-  resolveAlert: (patientId: string, alertId: string) => void
-  approveSignal: (patientId: string, signal: ClinicalSignal) => void
+  fetchPatient: (id: string) => Promise<Patient | null>
+  addPatient: (input: NewPatientInput) => Promise<string>
+  resolveAlert: (patientId: string, alertId: string) => Promise<void>
+  approveSignal: (patientId: string, signal: ClinicalSignal) => Promise<void>
+  extractSignal: (patientId: string, rawNotes: string) => Promise<ClinicalSignal>
 }
 
 const PatientsContext = createContext<PatientsState | null>(null)
 
+function mapPatient(p: any): Patient {
+  return {
+    id: p.id,
+    name: p.name,
+    age: p.age ?? 0,
+    diagnosis: p.diagnosis,
+    admittedDate: p.admittedDate?.split('T')[0] ?? '',
+    dischargedDate: p.dischargedDate?.split('T')[0] ?? '',
+    doctorId: p.doctorId,
+    riskScore: p.riskScore as RiskScore,
+    phoneNumber: p.phoneNumber,
+    language: (p.language ?? 'english') as PatientLanguage,
+    lastCheckIn: p.lastCheckIn ?? null,
+    signal: p.signal ?? null,
+    checkIns: (p.checkIns ?? []).map((c: any) => ({
+      id: c.id,
+      timestamp: c.timestamp,
+      message: c.message,
+      riskScore: c.riskScore,
+      triggeredFlags: c.triggeredFlags ?? [],
+      botResponse: c.botResponse,
+    })),
+    alerts: (p.alerts ?? []).map((a: any) => ({
+      id: a.id,
+      timestamp: a.timestamp,
+      type: a.type,
+      message: a.message,
+      resolved: a.resolved,
+    })),
+  }
+}
+
 export function PatientsProvider({ children }: { children: ReactNode }) {
-  const [patients, setPatients] = useState<Patient[]>(MOCK_PATIENTS)
+  const { isAuthenticated } = useAuth()
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const refreshPatients = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await api.patients.list({ limit: 50 })
+      setPatients(res.patients.map(mapPatient))
+    } catch (err) {
+      console.error('Failed to fetch patients:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshPatients()
+    } else {
+      setPatients([])
+    }
+  }, [isAuthenticated, refreshPatients])
 
   function getPatient(id: string) {
     return patients.find((p) => p.id === id)
   }
 
-  function addPatient(input: NewPatientInput): string {
-    const id = `p-${Date.now()}`
-    const today = new Date().toISOString().split('T')[0]
-    const newPatient: Patient = {
-      id,
-      name: input.name,
-      age: 0,
-      diagnosis: 'Awaiting Signal',
-      admittedDate: today,
-      dischargedDate: today,
-      doctorId: 'dr-001',
-      riskScore: 'unmonitored',
-      signal: null,
-      checkIns: [],
-      alerts: [],
-      lastCheckIn: null,
-      phoneNumber: input.phoneNumber,
-      language: input.language,
+  async function fetchPatient(id: string): Promise<Patient | null> {
+    try {
+      const raw = await api.patients.get(id)
+      const patient = mapPatient(raw)
+      setPatients((prev) => {
+        const exists = prev.find((p) => p.id === id)
+        if (exists) return prev.map((p) => (p.id === id ? patient : p))
+        return [patient, ...prev]
+      })
+      return patient
+    } catch {
+      return null
     }
-    setPatients((prev) => [newPatient, ...prev])
-    return id
   }
 
-  function updateRiskScore(patientId: string, score: RiskScore) {
-    setPatients((prev) =>
-      prev.map((p) => (p.id === patientId ? { ...p, riskScore: score } : p))
-    )
+  async function addPatient(input: NewPatientInput): Promise<string> {
+    const res = await api.patients.create(input)
+    await refreshPatients()
+    return res.id
   }
 
-  function addCheckIn(patientId: string, checkIn: CheckIn) {
-    setPatients((prev) =>
-      prev.map((p) =>
-        p.id === patientId
-          ? { ...p, checkIns: [checkIn, ...p.checkIns], lastCheckIn: checkIn.timestamp }
-          : p
-      )
-    )
+  async function resolveAlert(_patientId: string, alertId: string): Promise<void> {
+    await api.alerts.resolve(alertId)
+    await refreshPatients()
   }
 
-  function addAlert(patientId: string, alert: Alert) {
-    setPatients((prev) =>
-      prev.map((p) =>
-        p.id === patientId ? { ...p, alerts: [alert, ...p.alerts] } : p
-      )
-    )
+  async function extractSignal(patientId: string, rawNotes: string): Promise<ClinicalSignal> {
+    const signal = await api.patients.generateSignal(patientId, rawNotes)
+    return {
+      patientSummary: signal.patientSummary,
+      medications: signal.medications.map((m: any, i: number) => ({ ...m, id: m.id || `m${i}` })),
+      redFlags: signal.redFlags,
+      monitoringSchedule: signal.monitoringSchedule.map((s: any, i: number) => ({ ...s, id: s.id || `ms${i}` })),
+      diagnosis: signal.diagnosis,
+      rawNotes: signal.rawNotes,
+      confidence: signal.confidence,
+      approvedAt: null,
+    }
   }
 
-  function resolveAlert(patientId: string, alertId: string) {
-    setPatients((prev) =>
-      prev.map((p) =>
-        p.id === patientId
-          ? {
-              ...p,
-              alerts: p.alerts.map((a) =>
-                a.id === alertId ? { ...a, resolved: true } : a
-              ),
-            }
-          : p
-      )
-    )
-  }
-
-  function approveSignal(patientId: string, signal: ClinicalSignal) {
-    setPatients((prev) =>
-      prev.map((p) =>
-        p.id === patientId
-          ? { ...p, signal, riskScore: 'green' as RiskScore }
-          : p
-      )
-    )
+  async function approveSignal(patientId: string, signal: ClinicalSignal): Promise<void> {
+    await api.patients.approveSignal(patientId, signal)
+    await refreshPatients()
   }
 
   return (
     <PatientsContext.Provider
-      value={{ patients, getPatient, addPatient, updateRiskScore, addCheckIn, addAlert, resolveAlert, approveSignal }}
+      value={{ patients, loading, refreshPatients, getPatient, fetchPatient, addPatient, resolveAlert, approveSignal, extractSignal }}
     >
       {children}
     </PatientsContext.Provider>
