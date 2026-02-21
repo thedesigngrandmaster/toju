@@ -17,11 +17,11 @@ const sora = Sora({
 
 export const metadata: Metadata = {
   title: {
-    template: '%s | CareBridge Sentinel',
-    default: 'CareBridge Sentinel',
+    template: '%s | Toju',
+    default: 'Toju — AI Post-Discharge Monitoring',
   },
   description:
-    'AI-powered post-discharge monitoring. Close the loop between patients and providers before the ER visit.',
+    'Toju turns messy discharge notes into proactive, AI-powered patient monitoring — closing the loop between hospital and home.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
