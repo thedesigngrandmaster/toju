@@ -70,7 +70,7 @@ export default function SignalsList() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">{p.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {p.signal!.diagnosis} · {p.signal!.medications.length} medications · {p.signal!.redFlags.length} red flags
+                    {p.signal!.diagnosis} · {p.signal!.medications?.length ?? 0} medications · {p.signal!.redFlags?.length ?? 0} red flags
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground shrink-0">

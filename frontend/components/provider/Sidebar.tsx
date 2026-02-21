@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
   Bell,
   FileSignature,
-  ShieldCheck,
   LogOut,
   Plus,
   PanelLeftClose,
@@ -51,15 +51,22 @@ export default function Sidebar({
           href="/dashboard"
           className={cn('flex items-center gap-2 min-w-0', collapsed && 'justify-center')}
         >
-          <div className="size-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <ShieldCheck className="size-3.5 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <p className="text-sm font-semibold tracking-tight text-foreground leading-none">
-                Toju
-              </p>
-            </div>
+          {collapsed ? (
+            <Image
+              src="/Image/toju-icon.png"
+              alt="Toju"
+              width={28}
+              height={28}
+              className="shrink-0"
+            />
+          ) : (
+            <Image
+              src="/Image/toju-logo.png"
+              alt="Toju"
+              width={72}
+              height={28}
+              className="shrink-0"
+            />
           )}
         </Link>
         {!collapsed && (

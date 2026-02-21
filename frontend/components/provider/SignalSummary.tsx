@@ -62,11 +62,11 @@ export default function SignalSummary({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Pill className="size-4 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Medications ({signal.medications.length})</p>
+            <p className="text-xs text-muted-foreground">Medications ({signal.medications?.length ?? 0})</p>
           </div>
           <div className="space-y-1.5">
-            {signal.medications.map((med) => (
-              <div key={med.id} className="flex items-center gap-2 py-1">
+            {(signal.medications ?? []).map((med, i) => (
+              <div key={med.id ?? i} className="flex items-center gap-2 py-1">
                 <p className="text-xs font-medium text-foreground flex-1">{med.name}</p>
                 <span className="text-xs text-muted-foreground">{med.dose} · {med.frequency}</span>
                 <span className={cn('text-xs px-2 py-0.5 rounded-full', statusCls[med.status])}>
@@ -80,10 +80,10 @@ export default function SignalSummary({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle className="size-4 text-destructive" />
-            <p className="text-xs text-muted-foreground">Red Flags ({signal.redFlags.length})</p>
+            <p className="text-xs text-muted-foreground">Red Flags ({signal.redFlags?.length ?? 0})</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {signal.redFlags.map((flag, i) => (
+            {(signal.redFlags ?? []).map((flag, i) => (
               <span
                 key={i}
                 className="text-xs bg-danger-bg text-destructive px-2 py-0.5 rounded-full"
@@ -97,11 +97,11 @@ export default function SignalSummary({
         <div>
           <div className="flex items-center gap-2 mb-2">
             <CalendarCheck className="size-4 text-primary" />
-            <p className="text-xs text-muted-foreground">Monitoring ({signal.monitoringSchedule.length})</p>
+            <p className="text-xs text-muted-foreground">Monitoring ({signal.monitoringSchedule?.length ?? 0})</p>
           </div>
           <div className="space-y-1.5">
-            {signal.monitoringSchedule.map((item) => (
-              <div key={item.id} className="flex items-center gap-4 border rounded-lg px-4 py-3 shadow-none">
+            {(signal.monitoringSchedule ?? []).map((item, i) => (
+              <div key={item.id ?? i} className="flex items-center gap-4 border rounded-lg px-4 py-3 shadow-none">
                 <p className="text-xs text-foreground flex-1">{item.question}</p>
                 <span className="text-xs text-muted-foreground shrink-0 capitalize">
                   {item.frequency}{item.time && ` · ${item.time}`}
