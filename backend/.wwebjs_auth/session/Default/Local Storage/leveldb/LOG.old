@@ -1,0 +1,6 @@
+2026/02/21-23:53:29.100 6938 Reusing MANIFEST C:\Users\hp\Documents\selora\backend\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/02/21-23:53:29.109 6938 Recovering log #4
+2026/02/21-23:53:29.112 6938 Reusing old log C:\Users\hp\Documents\selora\backend\.wwebjs_auth\session\Default\Local Storage\leveldb/000004.log 
+2026/02/21-23:55:29.858 2990 Level-0 table #8: started
+2026/02/21-23:55:29.876 2990 Level-0 table #8: 15338 bytes OK
+2026/02/21-23:55:29.878 2990 Delete type=0 #4
