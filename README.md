@@ -2,7 +2,7 @@
 
 **Proactive AI Health Partnership – Turning Every Smartphone into a Clinical Early Warning System**
 
-[![Demo URL](https://toju-ts.vercel.app/)
+[Demo URL](https://toju-ts.vercel.app/)
 
 Toju is an AI-driven clinical communication and triage SaaS designed specifically to eliminate the post-discharge care blind spot.
 
