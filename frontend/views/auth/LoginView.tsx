@@ -68,7 +68,7 @@ export default function LoginView() {
               <ShieldCheck className="size-5 text-primary" />
             </div>
             <h1 className="font-display text-base font-semibold tracking-tight text-foreground">
-              CareBridge Sentinel
+              Toju
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">Provider Portal</p>
           </div>

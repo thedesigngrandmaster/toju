@@ -79,6 +79,18 @@ body {
   border-color: hsl(var(--border));
 }
 
+button,
+a,
+[role="button"],
+[type="submit"],
+[type="reset"],
+[tabindex]:not([tabindex="-1"]),
+label[for],
+select,
+summary {
+  cursor: pointer;
+}
+
 /* ─── Form Primitives ──────────────────────────────────────── */
 
 .form-group {

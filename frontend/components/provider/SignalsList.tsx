@@ -31,7 +31,7 @@ export default function SignalsList() {
             {pending.map((p) => (
               <Link
                 key={p.id}
-                href={`/patients/${p.id}/signal`}
+                href={`/dashboard/patients/${p.id}/signal`}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors group"
               >
                 <div className="size-7 rounded-lg bg-warning-bg flex items-center justify-center shrink-0">
@@ -61,7 +61,7 @@ export default function SignalsList() {
             {withSignal.map((p) => (
               <Link
                 key={p.id}
-                href={`/patients/${p.id}`}
+                href={`/dashboard/patients/${p.id}`}
                 className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
               >
                 <div className="size-7 rounded-lg bg-success-bg flex items-center justify-center shrink-0">
@@ -73,7 +73,7 @@ export default function SignalsList() {
                     {p.signal!.diagnosis} · {p.signal!.medications.length} medications · {p.signal!.redFlags.length} red flags
                   </p>
                 </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">
+                <span className="text-xs text-muted-foreground shrink-0">
                   {formatDate(p.signal!.approvedAt!)}
                 </span>
               </Link>

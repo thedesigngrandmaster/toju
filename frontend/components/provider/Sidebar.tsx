@@ -57,10 +57,7 @@ export default function Sidebar({
           {!collapsed && (
             <div className="min-w-0">
               <p className="text-sm font-semibold tracking-tight text-foreground leading-none">
-                CareBridge
-              </p>
-              <p className="text-[10px] text-muted-foreground leading-none mt-0.5">
-                Sentinel
+                Toju
               </p>
             </div>
           )}

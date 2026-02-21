@@ -52,7 +52,7 @@ export default function ApproveButton({ onApprove, loading = false }: Props) {
         </Button>
         <Button
           color="primary"
-          className="px-8 py-5"
+          className="px-8 py-5 text-white"
           loading={loading}
           onPress={onApprove}
           startContent={!loading ? <ShieldCheck className="size-4" /> : undefined}

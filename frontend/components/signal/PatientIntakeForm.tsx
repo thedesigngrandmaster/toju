@@ -45,7 +45,7 @@ export default function PatientIntakeForm({ onSubmit, initialData }: Props) {
       </div>
       <div className="p-4 space-y-4">
         <p className="text-xs text-muted-foreground">
-          Enter the patient&apos;s core details to begin the CareBridge monitoring loop.
+          Enter the patient&apos;s core details to begin the Toju monitoring loop.
           The AI companion will communicate with the patient in their preferred language.
         </p>
 
