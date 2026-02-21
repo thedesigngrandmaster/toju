@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import type { Variants } from 'framer-motion'
 import {
   ArrowRight,
   Activity,
   Bell,
-  ShieldCheck,
   Zap,
   ArrowUpRight,
   HeartPulse,
@@ -75,29 +75,20 @@ const flowSteps = [
 export default function LandingView() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <nav className="fixed top-0 inset-x-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="size-7 rounded-lg bg-primary flex items-center justify-center">
-              <ShieldCheck className="size-3.5 text-white" />
-            </div>
-            <span className="font-display font-semibold text-sm tracking-tight text-foreground">
-              Toju
-            </span>
-          </Link>
-          <Link
-            href="/auth/login"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Provider Login
-            <ArrowRight className="size-3" />
-          </Link>
-        </div>
-      </nav>
-
-      <section className="pt-32 pb-20 px-4">
+      <section className="pt-6 pb-20 px-4">
         <div className="max-w-5xl mx-auto">
-          <div className="max-w-2xl">
+          <div className="flex items-center justify-between mb-16">
+            <Image src="/Image/toju-logo.png" alt="Toju" width={80} height={30} />
+            <Link
+              href="/auth/login"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Provider Login
+              <ArrowRight className="size-3" />
+            </Link>
+          </div>
+
+        <div className="max-w-2xl">
             <motion.div
               custom={0}
               variants={fadeUp}
@@ -275,12 +266,7 @@ export default function LandingView() {
 
       <footer className="border-t py-6 px-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="size-5 rounded bg-primary flex items-center justify-center">
-              <ShieldCheck className="size-2.5 text-white" />
-            </div>
-            <span className="text-xs text-muted-foreground">Toju</span>
-          </div>
+          <Image src="/Image/toju-logo.png" alt="Toju" width={48} height={18} className="opacity-60" />
           <p className="text-xs text-muted-foreground">Built for healthcare. Built for impact.</p>
         </div>
       </footer>

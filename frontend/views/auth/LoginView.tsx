@@ -3,12 +3,12 @@
 import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ShieldCheck, ArrowRight, Copy } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
-import { DEMO_CREDENTIALS } from '@/constant/mockPatients'
 import { CustomInput, CustomPassword } from '@/components/FormElements'
 import toast from 'react-hot-toast'
-import Link from 'next/link'
 
 export default function LoginView() {
   const router = useRouter()
@@ -34,27 +34,13 @@ export default function LoginView() {
     }
   }
 
-  function fillDemo() {
-    setEmail(DEMO_CREDENTIALS.email)
-    setPassword(DEMO_CREDENTIALS.password)
-    toast('Demo credentials filled in.', { icon: '🔑' })
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <Link
-          href="/"
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          ← Back to home
+      <div className="fixed top-4 left-10">
+        <Link href="/">
+          <Image src="/Image/toju-logo.png" alt="Toju" width={72} height={28} />
         </Link>
-      </motion.div>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -63,14 +49,11 @@ export default function LoginView() {
         className="w-full max-w-sm"
       >
         <div className="border rounded-2xl p-6">
-          <div className="flex flex-col items-center mb-6">
-            <div className="size-10 rounded-lg bg-secondary border flex items-center justify-center mb-3">
-              <ShieldCheck className="size-5 text-primary" />
-            </div>
+          <div className="mb-5">
             <h1 className="font-display text-base font-semibold tracking-tight text-foreground">
-              Toju
+              Provider Portal
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">Provider Portal</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Sign in to your Toju account</p>
           </div>
 
           <form onSubmit={handleSubmit} autoComplete="off">
@@ -121,36 +104,7 @@ export default function LoginView() {
             </button>
           </form>
 
-          <div className="mt-5 rounded-xl border bg-secondary/50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">
-                Demo Access
-              </p>
-              <button
-                type="button"
-                onClick={fillDemo}
-                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:opacity-80 transition-opacity"
-              >
-                <Copy className="size-3" />
-                Fill in
-              </button>
-            </div>
-            <div className="space-y-1.5 font-mono text-xs">
-              <div className="flex items-center gap-3">
-                <span className="text-muted-foreground w-14 shrink-0">Email</span>
-                <span className="text-foreground truncate">{DEMO_CREDENTIALS.email}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-muted-foreground w-14 shrink-0">Pass</span>
-                <span className="text-foreground">{DEMO_CREDENTIALS.password}</span>
-              </div>
-            </div>
-          </div>
         </div>
-
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Lagos University Teaching Hospital
-        </p>
       </motion.div>
     </div>
   )
