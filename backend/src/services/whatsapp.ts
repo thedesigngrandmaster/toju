@@ -2,7 +2,7 @@ import twilio from 'twilio'
 import { env } from '../config/env'
 
 const client = twilio(env.twilioAccountSid, env.twilioAuthToken)
-b
+
 export async function sendWhatsApp(to: string, body: string): Promise<void> {
   await client.messages.create({
     from: env.twilioWhatsappFrom,
