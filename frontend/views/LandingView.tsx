@@ -82,7 +82,7 @@ export default function LandingView() {
               <ShieldCheck className="size-3.5 text-white" />
             </div>
             <span className="font-display font-semibold text-sm tracking-tight text-foreground">
-              CareBridge <span className="text-primary">Sentinel</span>
+              Toju
             </span>
           </Link>
           <Link
@@ -127,7 +127,7 @@ export default function LandingView() {
               animate="show"
               className="text-sm text-muted-foreground leading-relaxed mb-8 max-w-lg"
             >
-              CareBridge Sentinel turns messy discharge notes into a proactive monitoring
+              Toju turns messy discharge notes into a proactive monitoring
               system — alerting you to patient risk{' '}
               <span className="text-foreground font-medium">before the ER visit</span>, not after.
             </motion.p>
@@ -191,7 +191,7 @@ export default function LandingView() {
               The Closed Loop
             </p>
             <h2 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-              How Sentinel Works
+              How Toju Works
             </h2>
           </motion.div>
 
@@ -279,7 +279,7 @@ export default function LandingView() {
             <div className="size-5 rounded bg-primary flex items-center justify-center">
               <ShieldCheck className="size-2.5 text-white" />
             </div>
-            <span className="text-xs text-muted-foreground">CareBridge Sentinel</span>
+            <span className="text-xs text-muted-foreground">Toju</span>
           </div>
           <p className="text-xs text-muted-foreground">Built for healthcare. Built for impact.</p>
         </div>
