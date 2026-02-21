@@ -11,6 +11,7 @@ export const MOCK_PATIENTS: Patient[] = [
     doctorId: 'dr-001',
     riskScore: 'red',
     phoneNumber: '+2348012345678',
+    language: 'english',
     lastCheckIn: '2026-02-21T08:14:00Z',
     signal: {
       patientSummary:
@@ -78,6 +79,7 @@ export const MOCK_PATIENTS: Patient[] = [
     doctorId: 'dr-001',
     riskScore: 'yellow',
     phoneNumber: '+2348023456789',
+    language: 'english',
     lastCheckIn: '2026-02-19T09:22:00Z',
     signal: {
       patientSummary:
@@ -133,6 +135,7 @@ export const MOCK_PATIENTS: Patient[] = [
     doctorId: 'dr-001',
     riskScore: 'green',
     phoneNumber: '+2348034567890',
+    language: 'pidgin',
     lastCheckIn: '2026-02-21T07:55:00Z',
     signal: {
       patientSummary:
@@ -187,6 +190,7 @@ export const MOCK_PATIENTS: Patient[] = [
     doctorId: 'dr-001',
     riskScore: 'unmonitored',
     phoneNumber: '+2348045678901',
+    language: 'yoruba',
     lastCheckIn: null,
     signal: null,
     checkIns: [],
