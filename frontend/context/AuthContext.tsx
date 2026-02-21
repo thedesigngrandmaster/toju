@@ -7,6 +7,7 @@ import { DEMO_CREDENTIALS, DEMO_DOCTOR } from '@/constant/mockPatients'
 type AuthState = {
   doctor: Doctor | null
   isAuthenticated: boolean
+  isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -17,6 +18,7 @@ const STORAGE_KEY = 'carebridge_session'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -27,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY)
       }
     }
+    setIsLoading(false)
   }, [])
 
   async function login(email: string, password: string) {
@@ -46,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ doctor, isAuthenticated: !!doctor, login, logout }}>
+    <AuthContext.Provider value={{ doctor, isAuthenticated: !!doctor, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
