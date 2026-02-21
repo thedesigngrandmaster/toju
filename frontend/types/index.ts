@@ -44,6 +44,8 @@ export type Alert = {
   resolved: boolean
 }
 
+export type PatientLanguage = 'english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa'
+
 export type Patient = {
   id: string
   name: string
@@ -58,6 +60,7 @@ export type Patient = {
   alerts: Alert[]
   lastCheckIn: string | null
   phoneNumber: string
+  language: PatientLanguage
 }
 
 export type Doctor = {
