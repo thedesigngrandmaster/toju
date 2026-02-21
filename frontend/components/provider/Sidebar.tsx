@@ -128,7 +128,7 @@ export default function Sidebar({
 
         <div className={cn(collapsed ? '' : 'pt-2')}>
           <Link
-            href="/patients/new/signal"
+            href="/dashboard/patients/new"
             title={collapsed ? 'Add Patient' : undefined}
             className={cn(
               'flex items-center gap-2.5 rounded-lg text-xs font-medium text-primary hover:bg-muted/50 transition-colors',

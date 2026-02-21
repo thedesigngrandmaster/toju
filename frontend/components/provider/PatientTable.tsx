@@ -34,8 +34,8 @@ function timeAgo(iso: string | null) {
 function PatientRow({ patient }: { patient: Patient }) {
   const hasSignal = !!patient.signal?.approvedAt
   const href = hasSignal
-    ? `/patients/${patient.id}`
-    : `/patients/${patient.id}/signal`
+    ? `/dashboard/patients/${patient.id}`
+    : `/dashboard/patients/${patient.id}/signal`
 
   return (
     <Link
