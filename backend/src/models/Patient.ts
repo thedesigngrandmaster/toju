@@ -1,8 +1,36 @@
 import { Schema, model, Document, Types } from 'mongoose'
 
-// ── Subdocuments ─────────────────────────────────────────────────────────────
+// ── Subdocument interfaces ────────────────────────────────────────────────────
 
-const MedicationSchema = new Schema(
+export interface IMedication {
+  name: string
+  dose: string
+  frequency: string
+  status: 'continued' | 'started' | 'stopped' | 'adjusted'
+  confidence: number
+}
+
+export interface IMonitoringItem {
+  question: string
+  frequency: 'daily' | 'weekly' | 'as_needed'
+  time: string | null
+}
+
+export interface IClinicalSignal {
+  patientSummary: string
+  rawNotes: string
+  medications: IMedication[]
+  redFlags: string[]
+  monitoringSchedule: IMonitoringItem[]
+  diagnosis: string
+  confidence: number
+  approvedAt: Date | null
+  approvedBy: Types.ObjectId | string | null
+}
+
+// ── Subdocument schemas ───────────────────────────────────────────────────────
+
+const MedicationSchema = new Schema<IMedication>(
   {
     name: { type: String, required: true },
     dose: { type: String, required: true },
@@ -17,7 +45,7 @@ const MedicationSchema = new Schema(
   { _id: true }
 )
 
-const MonitoringItemSchema = new Schema(
+const MonitoringItemSchema = new Schema<IMonitoringItem>(
   {
     question: { type: String, required: true },
     frequency: { type: String, enum: ['daily', 'weekly', 'as_needed'], required: true },
@@ -26,7 +54,7 @@ const MonitoringItemSchema = new Schema(
   { _id: true }
 )
 
-const ClinicalSignalSchema = new Schema(
+const ClinicalSignalSchema = new Schema<IClinicalSignal>(
   {
     patientSummary: { type: String, required: true },
     rawNotes: { type: String, required: true },
@@ -55,7 +83,7 @@ export interface IPatient extends Document {
   admittedDate: Date
   dischargedDate: Date
   riskScore: RiskScore
-  signal: typeof ClinicalSignalSchema | null
+  signal: IClinicalSignal | null
   lastCheckIn: Date | null
   checkInToken: string
   createdAt: Date
