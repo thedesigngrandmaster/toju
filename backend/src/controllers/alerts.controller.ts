@@ -1,5 +1,7 @@
 import { Response } from 'express'
 import { Alert } from '../models/Alert'
+import { Patient } from '../models/Patient'
+import { CheckIn } from '../models/CheckIn'
 import type { AuthRequest } from '../middleware/auth'
 
 export async function listAlerts(req: AuthRequest, res: Response): Promise<void> {
@@ -11,7 +13,21 @@ export async function listAlerts(req: AuthRequest, res: Response): Promise<void>
     .populate('patientId', 'name diagnosis riskScore')
     .sort({ timestamp: -1 })
     .lean()
-  res.json(alerts)
+
+  const result = alerts.map((a) => {
+    const patient = a.patientId as any
+    return {
+      id: a._id,
+      patientId: patient?._id ?? a.patientId,
+      patientName: patient?.name ?? 'Unknown',
+      timestamp: a.timestamp,
+      type: a.type,
+      message: a.message,
+      resolved: a.resolved,
+    }
+  })
+
+  res.json({ alerts: result })
 }
 
 export async function resolveAlert(req: AuthRequest, res: Response): Promise<void> {
@@ -20,9 +36,32 @@ export async function resolveAlert(req: AuthRequest, res: Response): Promise<voi
     { resolved: true, resolvedAt: new Date() },
     { new: true }
   ).lean()
+
   if (!alert) {
-    res.status(404).json({ error: 'Alert not found' })
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Alert not found' } })
     return
   }
-  res.json(alert)
+
+  const unresolvedCount = await Alert.countDocuments({
+    patientId: alert.patientId,
+    resolved: false,
+  })
+
+  if (unresolvedCount === 0) {
+    const latestCheckIn = await CheckIn.findOne({ patientId: alert.patientId })
+      .sort({ timestamp: -1 })
+      .lean()
+
+    let newRisk: string = 'green'
+    if (latestCheckIn?.riskScore === 'yellow') newRisk = 'yellow'
+    if (latestCheckIn?.riskScore === 'red') newRisk = 'yellow'
+
+    await Patient.updateOne({ _id: alert.patientId }, { riskScore: newRisk })
+  }
+
+  res.json({
+    id: alert._id,
+    resolved: true,
+    resolvedAt: alert.resolvedAt,
+  })
 }

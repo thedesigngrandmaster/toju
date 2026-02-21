@@ -20,7 +20,16 @@ const AlertSchema = new Schema<IAlert>(
     resolved: { type: Boolean, default: false },
     resolvedAt: { type: Date, default: null },
   },
-  { timestamps: false }
+  {
+    timestamps: false,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+      },
+    },
+  }
 )
 
 AlertSchema.index({ doctorId: 1, resolved: 1, timestamp: -1 })

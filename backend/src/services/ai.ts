@@ -1,11 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 import { env } from '../config/env'
 
-const client = new Anthropic({ apiKey: env.anthropicKey })
-
-// ── Signal Extraction ─────────────────────────────────────────────────────────
+const ai = new GoogleGenAI({ apiKey: env.geminiKey })
 
 export interface ExtractedSignal {
+  age: number
   patientSummary: string
   diagnosis: string
   medications: Array<{
@@ -25,20 +24,17 @@ export interface ExtractedSignal {
 }
 
 export async function extractSignal(rawNotes: string): Promise<ExtractedSignal> {
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a clinical AI assistant. Extract structured discharge information from the following EMR notes and return ONLY valid JSON — no markdown, no explanation.
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `You are a clinical AI assistant. Extract structured discharge information from the following EMR notes and return ONLY valid JSON — no markdown, no explanation, no code fences.
 
 EMR NOTES:
 ${rawNotes}
 
 Return this exact JSON shape:
 {
-  "patientSummary": "Plain-language summary for the patient (2-3 sentences, simple language)",
+  "age": 45,
+  "patientSummary": "Plain-language summary for the patient (2-3 sentences, simple language, 5th-grade reading level)",
   "diagnosis": "Primary diagnosis string",
   "medications": [
     {
@@ -52,22 +48,19 @@ Return this exact JSON shape:
   "redFlags": ["Warning symptom 1", "Warning symptom 2"],
   "monitoringSchedule": [
     {
-      "question": "Check-in question to send the patient",
+      "question": "Check-in question to send the patient via WhatsApp",
       "frequency": "daily|weekly|as_needed",
       "time": "HH:MM or null"
     }
   ],
   "confidence": 0.94
 }`,
-      },
-    ],
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  return JSON.parse(text) as ExtractedSignal
+  const text = response.text ?? ''
+  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(cleaned) as ExtractedSignal
 }
-
-// ── Check-In Risk Analysis ────────────────────────────────────────────────────
 
 export interface RiskAnalysis {
   riskScore: 'red' | 'yellow' | 'green'
@@ -79,33 +72,33 @@ export async function analyzeCheckIn(
   patientMessage: string,
   redFlags: string[],
   patientName: string,
-  diagnosis: string
+  diagnosis: string,
+  medications: string[]
 ): Promise<RiskAnalysis> {
-  const message = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 512,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a clinical triage AI. Analyze a patient's check-in message and return ONLY valid JSON.
+  const firstName = patientName.split(' ')[0]
+  const medList = medications.length > 0 ? medications.join(', ') : 'none recorded'
 
-Patient: ${patientName}
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `You are Toju, a caring clinical health assistant sending WhatsApp messages to a post-discharge patient. Analyze the patient's check-in message and return ONLY valid JSON — no markdown, no code fences.
+
+Patient first name: ${firstName}
 Diagnosis: ${diagnosis}
-Red flags to watch for: ${redFlags.join(', ')}
+Current medications: ${medList}
+Red flags to watch for: ${redFlags.join(', ') || 'none'}
 Patient's message: "${patientMessage}"
 
 Return this exact JSON:
 {
   "riskScore": "red|yellow|green",
   "triggeredFlags": ["list of triggered red flag strings, or empty array"],
-  "botResponse": "Empathetic WhatsApp reply to the patient in simple English (2-3 sentences)"
+  "botResponse": "Your WhatsApp reply as Toju (2-3 sentences max). Rules: (1) Use their first name naturally in the reply, not as an opener. (2) Directly acknowledge what they specifically said — reference their words, not a generic greeting. (3) If green: give one specific, actionable care tip related to their diagnosis or a medication reminder. (4) If yellow: gently note the concern and advise what to do. (5) If red: tell them clearly to seek help immediately and contact their doctor. Never start with 'Hi [name], thanks for your message' or similar filler openers."
 }
 
-Scoring: red = red flag triggered or urgent symptom; yellow = concern or missed dose; green = all well.`,
-      },
-    ],
+Scoring: red = red flag symptom or urgent concern; yellow = worry, missed dose, or unclear symptom; green = patient is well.`,
   })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-  return JSON.parse(text) as RiskAnalysis
+  const text = response.text ?? ''
+  const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  return JSON.parse(cleaned) as RiskAnalysis
 }

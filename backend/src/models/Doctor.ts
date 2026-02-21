@@ -20,7 +20,18 @@ const DoctorSchema = new Schema<IDoctor>(
     passwordHash: { type: String, required: true },
     refreshTokenHash: { type: String, default: null },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+        delete ret.passwordHash
+        delete ret.refreshTokenHash
+      },
+    },
+  }
 )
 
 export const Doctor = model<IDoctor>('Doctor', DoctorSchema)

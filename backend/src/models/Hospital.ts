@@ -15,7 +15,16 @@ const HospitalSchema = new Schema<IHospital>(
     state: { type: String, required: true },
     slug: { type: String, required: true, unique: true, lowercase: true },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+      },
+    },
+  }
 )
 
 export const Hospital = model<IHospital>('Hospital', HospitalSchema)

@@ -25,7 +25,16 @@ const CheckInSchema = new Schema<ICheckIn>(
     triggeredFlags: { type: [String], default: [] },
     botResponse: { type: String, required: true },
   },
-  { timestamps: false }
+  {
+    timestamps: false,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+      },
+    },
+  }
 )
 
 CheckInSchema.index({ patientId: 1, timestamp: -1 })

@@ -1,5 +1,5 @@
-import { Router } from 'express'
-import { login, refresh, logout } from '../controllers/auth.controller'
+import { Router, Request, Response } from 'express'
+import { login, refresh, logout, getMe } from '../controllers/auth.controller'
 import {
   listPatients,
   getPatient,
@@ -8,18 +8,18 @@ import {
   approveSignal,
   updateRiskScore,
 } from '../controllers/patients.controller'
-import { inboundCheckIn, listCheckIns } from '../controllers/checkin.controller'
+import { listCheckIns } from '../controllers/checkin.controller'
 import { listAlerts, resolveAlert } from '../controllers/alerts.controller'
 import { requireAuth } from '../middleware/auth'
+import { getLatestQr, isWhatsAppReady } from '../services/whatsapp'
 
-const router = Router()
+const router: ReturnType<typeof Router> = Router()
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/auth/login', login)
 router.post('/auth/refresh', refresh)
 router.post('/auth/logout', logout)
+router.get('/doctors/me', requireAuth, getMe)
 
-// ── Patients ──────────────────────────────────────────────────────────────────
 router.get('/patients', requireAuth, listPatients)
 router.get('/patients/:id', requireAuth, getPatient)
 router.post('/patients', requireAuth, createPatient)
@@ -27,12 +27,22 @@ router.post('/patients/:id/signal', requireAuth, generateSignal)
 router.patch('/patients/:id/signal/approve', requireAuth, approveSignal)
 router.patch('/patients/:id/risk', requireAuth, updateRiskScore)
 
-// ── Check-ins ─────────────────────────────────────────────────────────────────
-router.post('/checkin/:token', inboundCheckIn)           // Twilio webhook (no auth)
 router.get('/patients/:id/checkins', requireAuth, listCheckIns)
 
-// ── Alerts ────────────────────────────────────────────────────────────────────
 router.get('/alerts', requireAuth, listAlerts)
 router.patch('/alerts/:id/resolve', requireAuth, resolveAlert)
+
+router.get('/whatsapp/qr', (_req: Request, res: Response) => {
+  const qr = getLatestQr()
+  if (!qr) {
+    res.json({ ready: isWhatsAppReady(), qr: null })
+    return
+  }
+  res.json({ ready: false, qr })
+})
+
+router.get('/whatsapp/status', (_req: Request, res: Response) => {
+  res.json({ ready: isWhatsAppReady() })
+})
 
 export default router

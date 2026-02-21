@@ -72,6 +72,7 @@ const ClinicalSignalSchema = new Schema<IClinicalSignal>(
 // ── Patient ───────────────────────────────────────────────────────────────────
 
 export type RiskScore = 'red' | 'yellow' | 'green' | 'unmonitored'
+export type PatientLanguage = 'english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa'
 
 export interface IPatient extends Document {
   doctorId: Types.ObjectId
@@ -79,6 +80,7 @@ export interface IPatient extends Document {
   name: string
   age: number
   phoneNumber: string
+  language: PatientLanguage
   diagnosis: string
   admittedDate: Date
   dischargedDate: Date
@@ -97,6 +99,11 @@ const PatientSchema = new Schema<IPatient>(
     name: { type: String, required: true },
     age: { type: Number, required: true },
     phoneNumber: { type: String, required: true },
+    language: {
+      type: String,
+      enum: ['english', 'pidgin', 'yoruba', 'igbo', 'hausa'],
+      default: 'english',
+    },
     diagnosis: { type: String, required: true },
     admittedDate: { type: Date, required: true },
     dischargedDate: { type: Date, required: true },
@@ -109,7 +116,16 @@ const PatientSchema = new Schema<IPatient>(
     lastCheckIn: { type: Date, default: null },
     checkInToken: { type: String, required: true, unique: true },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+      },
+    },
+  }
 )
 
 PatientSchema.index({ doctorId: 1, riskScore: 1 })
