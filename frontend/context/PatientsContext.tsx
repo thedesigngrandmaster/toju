@@ -1,12 +1,19 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
-import { Patient, RiskScore, CheckIn, Alert, ClinicalSignal } from '@/types'
+import { Patient, PatientLanguage, RiskScore, CheckIn, Alert, ClinicalSignal } from '@/types'
 import { MOCK_PATIENTS } from '@/constant/mockPatients'
+
+type NewPatientInput = {
+  name: string
+  phoneNumber: string
+  language: PatientLanguage
+}
 
 type PatientsState = {
   patients: Patient[]
   getPatient: (id: string) => Patient | undefined
+  addPatient: (input: NewPatientInput) => string
   updateRiskScore: (patientId: string, score: RiskScore) => void
   addCheckIn: (patientId: string, checkIn: CheckIn) => void
   addAlert: (patientId: string, alert: Alert) => void
@@ -21,6 +28,29 @@ export function PatientsProvider({ children }: { children: ReactNode }) {
 
   function getPatient(id: string) {
     return patients.find((p) => p.id === id)
+  }
+
+  function addPatient(input: NewPatientInput): string {
+    const id = `p-${Date.now()}`
+    const today = new Date().toISOString().split('T')[0]
+    const newPatient: Patient = {
+      id,
+      name: input.name,
+      age: 0,
+      diagnosis: 'Awaiting Signal',
+      admittedDate: today,
+      dischargedDate: today,
+      doctorId: 'dr-001',
+      riskScore: 'unmonitored',
+      signal: null,
+      checkIns: [],
+      alerts: [],
+      lastCheckIn: null,
+      phoneNumber: input.phoneNumber,
+      language: input.language,
+    }
+    setPatients((prev) => [newPatient, ...prev])
+    return id
   }
 
   function updateRiskScore(patientId: string, score: RiskScore) {
@@ -74,7 +104,7 @@ export function PatientsProvider({ children }: { children: ReactNode }) {
 
   return (
     <PatientsContext.Provider
-      value={{ patients, getPatient, updateRiskScore, addCheckIn, addAlert, resolveAlert, approveSignal }}
+      value={{ patients, getPatient, addPatient, updateRiskScore, addCheckIn, addAlert, resolveAlert, approveSignal }}
     >
       {children}
     </PatientsContext.Provider>
