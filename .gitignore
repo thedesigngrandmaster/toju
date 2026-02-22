@@ -30,4 +30,12 @@ yarn-error.log*
 .vercel
 
 # next-env (auto-generated)
+
+# WhatsApp Web.js session data
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
+
+# IDE / AI
+.cursor/
+.claude/
 frontend/next-env.d.ts

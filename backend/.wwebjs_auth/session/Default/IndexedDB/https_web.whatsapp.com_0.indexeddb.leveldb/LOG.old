@@ -1,6 +1,0 @@
-2026/02/21-23:53:29.628 3864 Reusing MANIFEST C:\Users\hp\Documents\selora\backend\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/02/21-23:53:29.628 3864 Recovering log #310
-2026/02/21-23:53:29.645 3864 Reusing old log C:\Users\hp\Documents\selora\backend\.wwebjs_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000310.log 
-2026/02/22-00:02:49.140 6a74 Level-0 table #317: started
-2026/02/22-00:02:49.194 6a74 Level-0 table #317: 1402185 bytes OK
-2026/02/22-00:02:49.196 6a74 Delete type=0 #310
