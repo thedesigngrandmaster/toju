@@ -1,0 +1,42 @@
+services:
+  # ── Backend (Docker + Chromium for whatsapp-web.js) ─────────────────────────
+  - type: web
+    name: toju-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter          # Must NOT be free — free tier sleeps and kills the WA bot
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: CHROME_PATH
+        value: /usr/bin/chromium
+      - key: MONGODB_URI
+        sync: false        # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: GEMINI_API_KEY
+        sync: false        # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false        # Set to your Render frontend URL after first deploy
+    disk:
+      name: whatsapp-session
+      mountPath: /app/.wwebjs_auth
+      sizeGB: 1
+
+  # ── Frontend (Next.js) ───────────────────────────────────────────────────────
+  - type: web
+    name: toju-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    plan: free             # Frontend can be free tier
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false        # Set to your backend Render URL after first deploy
