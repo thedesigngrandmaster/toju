@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { Doctor } from '@/types'
-import { DEMO_CREDENTIALS, DEMO_DOCTOR } from '@/constant/mockPatients'
+import { api, setAccessToken, getAccessToken } from '@/lib/api'
 
 type AuthState = {
   doctor: Doctor | null
@@ -14,37 +14,44 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null)
 
-const STORAGE_KEY = 'carebridge_session'
+const DOCTOR_KEY = 'toju_doctor'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
+    const token = getAccessToken()
+    const stored = localStorage.getItem(DOCTOR_KEY)
+    if (token && stored) {
       try {
         setDoctor(JSON.parse(stored))
       } catch {
-        localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(DOCTOR_KEY)
+        setAccessToken(null)
       }
     }
     setIsLoading(false)
   }, [])
 
   async function login(email: string, password: string) {
-    if (
-      email.trim().toLowerCase() !== DEMO_CREDENTIALS.email ||
-      password !== DEMO_CREDENTIALS.password
-    ) {
-      throw new Error('Invalid credentials. Use the demo credentials shown below.')
+    const res = await api.auth.login(email, password)
+    setAccessToken(res.accessToken)
+    const doc: Doctor = {
+      id: res.doctor.id,
+      name: res.doctor.name,
+      specialty: res.doctor.specialty,
+      hospital: res.doctor.hospital,
+      email: res.doctor.email,
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEMO_DOCTOR))
-    setDoctor(DEMO_DOCTOR)
+    localStorage.setItem(DOCTOR_KEY, JSON.stringify(doc))
+    setDoctor(doc)
   }
 
   function logout() {
-    localStorage.removeItem(STORAGE_KEY)
+    api.auth.logout().catch(() => {})
+    setAccessToken(null)
+    localStorage.removeItem(DOCTOR_KEY)
     setDoctor(null)
   }
 

@@ -1,4 +1,7 @@
 import { Schema, model, Document, Types } from 'mongoose'
+
+// ── Subdocument interfaces ────────────────────────────────────────────────────
+
 export interface IMedication {
   name: string
   dose: string
@@ -6,95 +9,126 @@ export interface IMedication {
   status: 'continued' | 'started' | 'stopped' | 'adjusted'
   confidence: number
 }
-export interface IRedFlag {
-  description: string
-}
+
 export interface IMonitoringItem {
   question: string
   frequency: 'daily' | 'weekly' | 'as_needed'
   time: string | null
 }
+
 export interface IClinicalSignal {
-  rawNotes: string
   patientSummary: string
-  diagnosis: string
-  overallConfidence: number
+  rawNotes: string
   medications: IMedication[]
-  redFlags: IRedFlag[]
-  monitoringItems: IMonitoringItem[]
+  redFlags: string[]
+  monitoringSchedule: IMonitoringItem[]
+  diagnosis: string
+  confidence: number
   approvedAt: Date | null
+  approvedBy: Types.ObjectId | string | null
 }
+
+// ── Subdocument schemas ───────────────────────────────────────────────────────
+
 const MedicationSchema = new Schema<IMedication>(
   {
-    name:       { type: String, required: true },
-    dose:       { type: String, default: '—' },
-    frequency:  { type: String, default: '—' },
-    status:     { type: String, enum: ['continued', 'started', 'stopped', 'adjusted'], required: true },
-    confidence: { type: Number, min: 0, max: 1, required: true },
+    name: { type: String, required: true },
+    dose: { type: String, required: true },
+    frequency: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ['continued', 'started', 'stopped', 'adjusted'],
+      required: true,
+    },
+    confidence: { type: Number, required: true },
   },
   { _id: true }
 )
-const RedFlagSchema = new Schema<IRedFlag>(
-  {
-    description: { type: String, required: true },
-  },
-  { _id: true }
-)
+
 const MonitoringItemSchema = new Schema<IMonitoringItem>(
   {
-    question:  { type: String, required: true },
+    question: { type: String, required: true },
     frequency: { type: String, enum: ['daily', 'weekly', 'as_needed'], required: true },
-    time:      { type: String, default: null },
+    time: { type: String, default: null },
   },
   { _id: true }
 )
+
 const ClinicalSignalSchema = new Schema<IClinicalSignal>(
   {
-    rawNotes:          { type: String, required: true },
-    patientSummary:    { type: String, required: true },
-    diagnosis:         { type: String, required: true },
-    overallConfidence: { type: Number, min: 0, max: 1, required: true },
-    medications:       [MedicationSchema],
-    redFlags:          [RedFlagSchema],
-    monitoringItems:   [MonitoringItemSchema],
-    approvedAt:        { type: Date, default: null },
+    patientSummary: { type: String, required: true },
+    rawNotes: { type: String, required: true },
+    medications: { type: [MedicationSchema], default: [] },
+    redFlags: { type: [String], default: [] },
+    monitoringSchedule: { type: [MonitoringItemSchema], default: [] },
+    diagnosis: { type: String, required: true },
+    confidence: { type: Number, required: true },
+    approvedAt: { type: Date, default: null },
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'Doctor', default: null },
   },
-  { timestamps: true, _id: true }
+  { _id: false }
 )
+
+// ── Patient ───────────────────────────────────────────────────────────────────
+
 export type RiskScore = 'red' | 'yellow' | 'green' | 'unmonitored'
+export type PatientLanguage = 'english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa'
+
 export interface IPatient extends Document {
+  doctorId: Types.ObjectId
+  hospitalId: Types.ObjectId
   name: string
   age: number
   phoneNumber: string
+  language: PatientLanguage
   diagnosis: string
   admittedDate: Date
   dischargedDate: Date
   riskScore: RiskScore
-  checkInToken: string
-  doctorId: Types.ObjectId
-  hospitalId: Types.ObjectId
   signal: IClinicalSignal | null
   lastCheckIn: Date | null
+  checkInToken: string
   createdAt: Date
   updatedAt: Date
 }
+
 const PatientSchema = new Schema<IPatient>(
   {
-    name:           { type: String, required: true },
-    age:            { type: Number, required: true },
-    phoneNumber:    { type: String, required: true },
-    diagnosis:      { type: String, required: true },
-    admittedDate:   { type: Date, required: true },
+    doctorId: { type: Schema.Types.ObjectId, ref: 'Doctor', required: true },
+    hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true },
+    name: { type: String, required: true },
+    age: { type: Number, required: true },
+    phoneNumber: { type: String, required: true },
+    language: {
+      type: String,
+      enum: ['english', 'pidgin', 'yoruba', 'igbo', 'hausa'],
+      default: 'english',
+    },
+    diagnosis: { type: String, required: true },
+    admittedDate: { type: Date, required: true },
     dischargedDate: { type: Date, required: true },
-    riskScore:      { type: String, enum: ['red', 'yellow', 'green', 'unmonitored'], default: 'unmonitored' },
-    checkInToken:   { type: String, required: true, unique: true },
-    doctorId:       { type: Schema.Types.ObjectId, ref: 'Doctor', required: true },
-    hospitalId:     { type: Schema.Types.ObjectId, ref: 'Hospital', required: true },
-    signal:         { type: ClinicalSignalSchema, default: null },
-    lastCheckIn:    { type: Date, default: null },
+    riskScore: {
+      type: String,
+      enum: ['red', 'yellow', 'green', 'unmonitored'],
+      default: 'unmonitored',
+    },
+    signal: { type: ClinicalSignalSchema, default: null },
+    lastCheckIn: { type: Date, default: null },
+    checkInToken: { type: String, required: true, unique: true },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+      },
+    },
+  }
 )
+
 PatientSchema.index({ doctorId: 1, riskScore: 1 })
-PatientSchema.index({ checkInToken: 1 }, { unique: true })
+PatientSchema.index({ hospitalId: 1 })
+
 export const Patient = model<IPatient>('Patient', PatientSchema)

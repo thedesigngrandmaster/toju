@@ -37,7 +37,7 @@ export default function AlertBanner() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Link
-                href={`/patients/${latestAlert.patient.id}`}
+                href={`/dashboard/patients/${latestAlert.patient.id}`}
                 className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full border text-xs font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 <Eye className="size-3" />

@@ -66,7 +66,7 @@ export default function AlertsList() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <Link
-                    href={`/patients/${a.patientId}`}
+                    href={`/dashboard/patients/${a.patientId}`}
                     className="text-sm font-medium text-foreground hover:underline"
                   >
                     {a.patientName}
@@ -76,7 +76,7 @@ export default function AlertsList() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {timeAgo(a.timestamp)}
                   </span>
                   <button
@@ -113,7 +113,7 @@ export default function AlertsList() {
                     {a.message}
                   </p>
                 </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">
+                <span className="text-xs text-muted-foreground shrink-0">
                   {timeAgo(a.timestamp)}
                 </span>
               </div>

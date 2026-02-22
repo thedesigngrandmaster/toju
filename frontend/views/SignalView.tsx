@@ -12,38 +12,6 @@ import ApproveButton from '@/components/signal/ApproveButton'
 import { usePatients } from '@/context/PatientsContext'
 import type { ClinicalSignal } from '@/types'
 
-function generateMockSignal(rawNotes: string): ClinicalSignal {
-  return {
-    patientSummary:
-      'You were treated for a lung infection called pneumonia. You are finishing a course of antibiotics. You also have diabetes, and we need to keep your blood sugar under control. Complete all your medicines and rest at home.',
-    medications: [
-      { id: 'm1', name: 'Co-amoxiclav (Augmentin)', dose: '625mg', frequency: 'Twice daily for 5 days', status: 'started', confidence: 0.96 },
-      { id: 'm2', name: 'Azithromycin', dose: '500mg', frequency: 'Once daily for 3 days', status: 'started', confidence: 0.95 },
-      { id: 'm3', name: 'Metformin', dose: '500mg', frequency: 'Twice daily with meals', status: 'continued', confidence: 0.97 },
-      { id: 'm4', name: 'Paracetamol', dose: '1g', frequency: 'Every 8 hours as needed', status: 'started', confidence: 0.93 },
-      { id: 'm5', name: 'Ibuprofen', dose: '—', frequency: '—', status: 'stopped', confidence: 0.98 },
-    ],
-    redFlags: [
-      'Severe difficulty breathing or cannot complete a full sentence',
-      'Lips or fingertips turning blue',
-      'Fever above 39.5°C despite paracetamol',
-      'Coughing up blood',
-      'Confusion or unusual drowsiness',
-      'Blood sugar reading above 20',
-    ],
-    monitoringSchedule: [
-      { id: 'ms1', question: 'Did you take your antibiotics today?', frequency: 'daily', time: '08:00' },
-      { id: 'ms2', question: 'How is your breathing? Any difficulty?', frequency: 'daily', time: '08:05' },
-      { id: 'ms3', question: 'What is your blood sugar reading this morning?', frequency: 'daily', time: '07:00' },
-      { id: 'ms4', question: 'Do you have a fever or cough?', frequency: 'daily', time: '08:10' },
-    ],
-    diagnosis: 'Community-Acquired Pneumonia (Right Lower Lobe) — Moderate Severity',
-    rawNotes,
-    confidence: 0.94,
-    approvedAt: null,
-  }
-}
-
 type Step = 'intake' | 'data-drop' | 'review'
 
 const STEPS: { key: Step; label: string; icon: typeof UserPlus }[] = [
@@ -58,7 +26,7 @@ type Props = {
 
 export default function SignalView({ patientId }: Props) {
   const router = useRouter()
-  const { getPatient, addPatient, approveSignal } = usePatients()
+  const { getPatient, addPatient, approveSignal, extractSignal } = usePatients()
 
   const existingPatient = patientId ? getPatient(patientId) : undefined
   const isExisting = !!existingPatient
@@ -76,16 +44,21 @@ export default function SignalView({ patientId }: Props) {
 
   const stepIndex = STEPS.findIndex((s) => s.key === step)
 
-  function handleIntakeSubmit(data: IntakeData) {
+  async function handleIntakeSubmit(data: IntakeData) {
     setIntakeData(data)
 
     if (!isExisting) {
-      const newId = addPatient({
-        name: data.name,
-        phoneNumber: data.phoneNumber,
-        language: data.language,
-      })
-      setCreatedPatientId(newId)
+      try {
+        const newId = await addPatient({
+          name: data.name,
+          phoneNumber: data.phoneNumber,
+          language: data.language,
+        })
+        setCreatedPatientId(newId)
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to register patient')
+        return
+      }
     }
 
     setStep('data-drop')
@@ -93,24 +66,35 @@ export default function SignalView({ patientId }: Props) {
   }
 
   async function handleExtract(notes: string) {
+    if (!createdPatientId) {
+      toast.error('No patient selected')
+      return
+    }
     setExtracting(true)
-    await new Promise((r) => setTimeout(r, 2500))
-    const extracted = generateMockSignal(notes)
-    setSignal(extracted)
-    setStep('review')
-    setExtracting(false)
-    toast.success('Clinical signal extracted')
+    try {
+      const extracted = await extractSignal(createdPatientId, notes)
+      setSignal(extracted)
+      setStep('review')
+      toast.success('Clinical signal extracted')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to extract signal')
+    } finally {
+      setExtracting(false)
+    }
   }
 
   async function handleApprove() {
     if (!signal || !createdPatientId) return
     setApproving(true)
-    await new Promise((r) => setTimeout(r, 1200))
-    const approved = { ...signal, approvedAt: new Date().toISOString() }
-    approveSignal(createdPatientId, approved)
-    toast.success('Signal verified — monitoring dispatched to patient')
-    setApproving(false)
-    router.push('/dashboard')
+    try {
+      await approveSignal(createdPatientId, signal)
+      toast.success('Signal verified — monitoring dispatched to patient via WhatsApp')
+      router.push('/dashboard')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to approve signal')
+    } finally {
+      setApproving(false)
+    }
   }
 
   function handleBack() {

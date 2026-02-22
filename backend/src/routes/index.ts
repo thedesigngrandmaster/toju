@@ -1,35 +1,48 @@
-import { Router } from 'express'
-import { login, refresh, logout } from '../controllers/auth.controller'
-import { getMe } from '../controllers/doctors.controller'
+import { Router, Request, Response } from 'express'
+import { login, refresh, logout, getMe } from '../controllers/auth.controller'
 import {
   listPatients,
   getPatient,
   createPatient,
-  updatePatient,
-  extractSignalHandler,
-  approveSignalHandler,
-  getSignal,
+  generateSignal,
+  approveSignal,
+  updateRiskScore,
 } from '../controllers/patients.controller'
-import { getPatientProfile, submitCheckIn, listCheckIns } from '../controllers/checkin.controller'
+import { listCheckIns } from '../controllers/checkin.controller'
 import { listAlerts, resolveAlert } from '../controllers/alerts.controller'
-import { dispatchCarePlan } from '../controllers/dispatch.controller'
 import { requireAuth } from '../middleware/auth'
-const router = Router()
+import { getLatestQr, isWhatsAppReady } from '../services/whatsapp'
+
+const router: ReturnType<typeof Router> = Router()
+
 router.post('/auth/login', login)
 router.post('/auth/refresh', refresh)
 router.post('/auth/logout', logout)
 router.get('/doctors/me', requireAuth, getMe)
+
 router.get('/patients', requireAuth, listPatients)
-router.post('/patients', requireAuth, createPatient)
 router.get('/patients/:id', requireAuth, getPatient)
-router.patch('/patients/:id', requireAuth, updatePatient)
-router.post('/patients/:id/signal/extract', requireAuth, extractSignalHandler)
-router.post('/patients/:id/signal/approve', requireAuth, approveSignalHandler)
-router.get('/patients/:id/signal', requireAuth, getSignal)
-router.get('/patient/:token', getPatientProfile)
-router.post('/patient/:token/checkin', submitCheckIn)
+router.post('/patients', requireAuth, createPatient)
+router.post('/patients/:id/signal', requireAuth, generateSignal)
+router.patch('/patients/:id/signal/approve', requireAuth, approveSignal)
+router.patch('/patients/:id/risk', requireAuth, updateRiskScore)
+
 router.get('/patients/:id/checkins', requireAuth, listCheckIns)
+
 router.get('/alerts', requireAuth, listAlerts)
 router.patch('/alerts/:id/resolve', requireAuth, resolveAlert)
-router.post('/patients/:id/dispatch', requireAuth, dispatchCarePlan)
+
+router.get('/whatsapp/qr', (_req: Request, res: Response) => {
+  const qr = getLatestQr()
+  if (!qr) {
+    res.json({ ready: isWhatsAppReady(), qr: null })
+    return
+  }
+  res.json({ ready: false, qr })
+})
+
+router.get('/whatsapp/status', (_req: Request, res: Response) => {
+  res.json({ ready: isWhatsAppReady() })
+})
+
 export default router

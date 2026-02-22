@@ -20,7 +20,18 @@ const DoctorSchema = new Schema<IDoctor>(
     refreshTokenHash:      String,
     refreshTokenExpiresAt: Date,
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: {
+      transform(_doc, ret: Record<string, any>) {
+        ret.id = ret._id
+        delete ret._id
+        delete ret.__v
+        delete ret.passwordHash
+        delete ret.refreshTokenHash
+      },
+    },
+  }
 )
 DoctorSchema.set('toJSON', {
   transform: (_doc: any, ret: any) => {
