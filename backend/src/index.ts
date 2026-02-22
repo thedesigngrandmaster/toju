@@ -1,5 +1,4 @@
-import express from 'express'
-import cors from 'cors'
+import express, { Request, Response, NextFunction } from 'express'
 import cookieParser from 'cookie-parser'
 import { env } from './config/env'
 import { connectDB } from './config/db'
@@ -15,21 +14,24 @@ const allowedOrigins = [
   'http://localhost:3001',
 ].filter(Boolean)
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // allow server-to-server (no origin) or listed origins
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true)
-      } else {
-        callback(null, false)
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-)
+// Custom CORS middleware — the `cors` npm package calls next() when origin
+// doesn't match, causing Express to return 405 on OPTIONS preflight routes.
+// This middleware always responds to OPTIONS with 204.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Credentials', 'true')
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+  }
+  if (req.method === 'OPTIONS') {
+    res.status(204).end()
+    return
+  }
+  next()
+})
 app.use(cookieParser())
 app.use(express.json())
 
