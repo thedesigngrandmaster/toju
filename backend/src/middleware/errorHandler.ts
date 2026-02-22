@@ -28,6 +28,6 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
   console.error('[UNHANDLED ERROR]', err)
   res.status(500).json({
     success: false,
-    error: env.NODE_ENV === 'production' ? 'Internal server error.' : err.message,
+    error: env.nodeEnv === 'production' ? 'Internal server error.' : err.message,
   })
 }
