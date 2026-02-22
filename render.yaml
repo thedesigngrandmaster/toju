@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: toju-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: CHROME_PATH
+        value: /usr/bin/chromium
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+    disk:
+      name: whatsapp-session
+      mountPath: /app/.wwebjs_auth
+      sizeGB: 1
+
+  - type: web
+    name: toju-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
