@@ -231,10 +231,19 @@ export async function approveSignal(req: AuthRequest, res: Response): Promise<vo
   const doctorName = doctor?.name ?? 'your doctor'
   const hospitalName = hospital?.name ?? 'your hospital'
 
-  sendMessage(
-    patient.phoneNumber,
-    `Hello ${patient.name}, this is Toju, your health partner from ${hospitalName}. ${doctorName} has asked me to help you recover at home. Can we start our daily check-ins? (Reply YES)`
-  ).catch((err) => console.error('[WA] Dispatch failed:', err))
+  let dispatched = false
+  let dispatchError: string | null = null
+
+  try {
+    await sendMessage(
+      patient.phoneNumber,
+      `Hello ${patient.name}, this is Toju, your health partner from ${hospitalName}. ${doctorName} has asked me to help you recover at home. Can we start our daily check-ins? (Reply YES)`
+    )
+    dispatched = true
+  } catch (err: any) {
+    dispatchError = err.message ?? 'WhatsApp send failed'
+    console.error('[WA] Dispatch failed:', err.message)
+  }
 
   res.json({
     patient: {
@@ -242,7 +251,8 @@ export async function approveSignal(req: AuthRequest, res: Response): Promise<vo
       riskScore: patient.riskScore,
       signal: patient.signal,
     },
-    dispatched: true,
+    dispatched,
+    ...(dispatchError ? { dispatchError } : {}),
   })
 }
 

@@ -23,8 +23,7 @@ export function isWhatsAppReady(): boolean {
 
 export async function sendMessage(phoneNumber: string, message: string): Promise<void> {
   if (!client || !isReady) {
-    console.warn('[WA] Client not ready, skipping message to', phoneNumber)
-    return
+    throw new Error('WhatsApp client is not connected. Scan the QR code at /v1/whatsapp/qr to activate the bot.')
   }
   const chatId = phoneNumber.replace('+', '') + '@c.us'
   await client.sendMessage(chatId, message)
