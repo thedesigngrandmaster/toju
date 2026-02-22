@@ -9,7 +9,27 @@ import { initWhatsApp } from './services/whatsapp'
 
 const app = express()
 
-app.use(cors({ origin: env.frontendUrl, credentials: true }))
+const allowedOrigins = [
+  ...env.frontendUrl.split(',').map((s) => s.trim()),
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean)
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow server-to-server (no origin) or listed origins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true)
+      } else {
+        callback(null, false)
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+)
 app.use(cookieParser())
 app.use(express.json())
 
