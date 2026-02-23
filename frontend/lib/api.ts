@@ -133,4 +133,13 @@ export const api = {
       )
     },
   },
+
+  whatsapp: {
+    status() {
+      return request<{ ready: boolean }>('/whatsapp/status')
+    },
+    qr() {
+      return request<{ ready: boolean; qr: string | null }>(`/whatsapp/qr?t=${Date.now()}`)
+    },
+  },
 }
