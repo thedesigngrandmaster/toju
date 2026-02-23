@@ -12,6 +12,7 @@ import {
   Plus,
   PanelLeftClose,
   PanelLeftOpen,
+  MessageCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/dashboard/patients', label: 'Patients', icon: Users },
   { href: '/dashboard/alerts', label: 'Alerts', icon: Bell },
   { href: '/dashboard/signals', label: 'Signals', icon: FileSignature },
+  { href: '/dashboard/whatsapp', label: 'WhatsApp', icon: MessageCircle },
 ]
 
 export default function Sidebar({
