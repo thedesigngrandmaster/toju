@@ -1,17 +1,20 @@
-import { Client, LocalAuth } from 'whatsapp-web.js'
-import qrcode from 'qrcode-terminal'
+import makeWASocket, {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+  type WASocket,
+  type WAMessage,
+} from '@whiskeysockets/baileys'
+import { Boom } from '@hapi/boom'
 import { Patient } from '../models/Patient'
 import { CheckIn } from '../models/CheckIn'
 import { Alert } from '../models/Alert'
 import { analyzeCheckIn } from './ai'
 
-let client: Client | null = null
+let sock: WASocket | null = null
 let latestQr: string | null = null
 let isReady = false
-
-export function getWhatsAppClient(): Client | null {
-  return client
-}
+let initializing = false
 
 export function getLatestQr(): string | null {
   return latestQr
@@ -22,32 +25,35 @@ export function isWhatsAppReady(): boolean {
 }
 
 export async function sendMessage(phoneNumber: string, message: string): Promise<void> {
-  if (!client || !isReady) {
-    throw new Error('WhatsApp client is not connected. Scan the QR code at /v1/whatsapp/qr to activate the bot.')
+  if (!sock || !isReady) {
+    throw new Error('WhatsApp client is not connected. Go to Dashboard → WhatsApp to scan the QR code.')
   }
-  const chatId = phoneNumber.replace('+', '') + '@c.us'
-  await client.sendMessage(chatId, message)
+  const jid = phoneNumber.replace('+', '') + '@s.whatsapp.net'
+  await sock.sendMessage(jid, { text: message })
 }
 
-export function buildCheckInMessage(
-  patientName: string,
-  question: string
-): string {
+export function buildCheckInMessage(patientName: string, question: string): string {
   return `Good morning ${patientName}! 👋\n\n${question}\n\nReply to this message with your answer.\n\n_Toju — Your health partner_`
 }
 
-async function handleInboundMessage(msg: { from: string; body: string; reply: (text: string) => Promise<any> }) {
-  if (msg.from === 'status@broadcast') return
+async function handleInboundMessage(msg: WAMessage) {
+  const sender = msg.key.remoteJid
+  if (!sender || msg.key.fromMe || sender === 'status@broadcast') return
 
-  const phone = '+' + msg.from.replace('@c.us', '')
+  const text =
+    msg.message?.conversation ||
+    msg.message?.extendedTextMessage?.text ||
+    ''
+  if (!text) return
+
+  const phone = '+' + sender.replace('@s.whatsapp.net', '')
   const patient = await Patient.findOne({ phoneNumber: phone })
-
   if (!patient) return
 
   if (!patient.signal || !patient.signal.approvedAt) {
-    await msg.reply(
-      `Hello! Your care plan is being set up by your doctor. We will reach out to you once everything is ready. 🙏`
-    )
+    await sock?.sendMessage(sender, {
+      text: `Hello! Your care plan is being set up by your doctor. We will reach out to you once everything is ready. 🙏`,
+    })
     return
   }
 
@@ -56,7 +62,7 @@ async function handleInboundMessage(msg: { from: string; body: string; reply: (t
     (m: any) => `${m.name} ${m.dose} ${m.frequency}`
   )
   const analysis = await analyzeCheckIn(
-    msg.body,
+    text,
     redFlags,
     patient.name,
     patient.diagnosis,
@@ -66,7 +72,7 @@ async function handleInboundMessage(msg: { from: string; body: string; reply: (t
   await CheckIn.create({
     patientId: patient._id,
     doctorId: patient.doctorId,
-    message: msg.body,
+    message: text,
     riskScore: analysis.riskScore,
     triggeredFlags: analysis.triggeredFlags,
     botResponse: analysis.botResponse,
@@ -85,60 +91,76 @@ async function handleInboundMessage(msg: { from: string; body: string; reply: (t
     })
   }
 
-  await msg.reply(analysis.botResponse)
+  await sock?.sendMessage(sender, { text: analysis.botResponse })
 }
 
-export function initWhatsApp(): void {
-  const executablePath =
-    process.env.CHROME_PATH ||
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+export async function initWhatsApp(): Promise<void> {
+  if (initializing) {
+    console.warn('[WA] Already initializing, skipping duplicate call')
+    return
+  }
+  initializing = true
 
-  client = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-      headless: true,
-      executablePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
-    },
-  })
+  try {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
+    const { version } = await fetchLatestBaileysVersion()
 
-  client.on('qr', (qr) => {
-    latestQr = qr
-    console.log('[WA] Scan the QR code below to connect WhatsApp:')
-    qrcode.generate(qr, { small: true })
-  })
+    sock = makeWASocket({
+      version,
+      auth: state,
+    })
 
-  client.on('ready', () => {
-    isReady = true
-    latestQr = null
-    console.log('[WA] WhatsApp client connected and ready')
-  })
+    sock.ev.on('creds.update', saveCreds)
 
-  client.on('authenticated', () => {
-    console.log('[WA] Authenticated successfully')
-  })
+    sock.ev.on('connection.update', (update) => {
+      const { connection, lastDisconnect, qr } = update
 
-  client.on('auth_failure', (msg) => {
-    console.error('[WA] Authentication failed:', msg)
-    isReady = false
-  })
+      if (qr) {
+        latestQr = qr
+        console.log('[WA] QR code generated — scan it to connect')
+      }
 
-  client.on('disconnected', (reason) => {
-    console.warn('[WA] Disconnected:', reason)
-    isReady = false
-    latestQr = null
-  })
+      if (connection === 'open') {
+        isReady = true
+        latestQr = null
+        initializing = false
+        console.log('[WA] WhatsApp client connected and ready')
+      }
 
-  client.on('message', (msg) => {
-    handleInboundMessage(msg).catch((err) =>
-      console.error('[WA] Error handling message:', err)
-    )
-  })
+      if (connection === 'close') {
+        isReady = false
+        latestQr = null
+        initializing = false
 
-  client.initialize().catch((err) => {
+        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
+        const loggedOut = statusCode === DisconnectReason.loggedOut
+
+        if (loggedOut) {
+          console.warn('[WA] Logged out — delete auth_info/ and restart to re-scan QR')
+          sock = null
+        } else {
+          console.warn('[WA] Disconnected (code ' + statusCode + '), reconnecting in 5s…')
+          sock = null
+          setTimeout(() => {
+            if (!initializing) initWhatsApp()
+          }, 5000)
+        }
+      }
+    })
+
+    sock.ev.on('messages.upsert', ({ messages }) => {
+      for (const msg of messages) {
+        handleInboundMessage(msg).catch((err) =>
+          console.error('[WA] Error handling message:', err)
+        )
+      }
+    })
+
+    console.log('[WA] Initializing WhatsApp client…')
+  } catch (err: any) {
     console.error('[WA] Failed to initialize:', err.message)
     console.warn('[WA] Server will continue without WhatsApp. Fix the issue and restart.')
     isReady = false
-  })
-  console.log('[WA] Initializing WhatsApp client...')
+    initializing = false
+  }
 }
