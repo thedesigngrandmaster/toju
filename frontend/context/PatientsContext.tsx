@@ -19,7 +19,7 @@ type PatientsState = {
   fetchPatient: (id: string) => Promise<Patient | null>
   addPatient: (input: NewPatientInput) => Promise<string>
   resolveAlert: (patientId: string, alertId: string) => Promise<void>
-  approveSignal: (patientId: string, signal: ClinicalSignal) => Promise<void>
+  approveSignal: (patientId: string, signal: ClinicalSignal) => Promise<{ dispatched: boolean; dispatchError?: string }>
   extractSignal: (patientId: string, rawNotes: string) => Promise<ClinicalSignal>
 }
 
@@ -126,9 +126,10 @@ export function PatientsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function approveSignal(patientId: string, signal: ClinicalSignal): Promise<void> {
-    await api.patients.approveSignal(patientId, signal)
+  async function approveSignal(patientId: string, signal: ClinicalSignal): Promise<{ dispatched: boolean; dispatchError?: string }> {
+    const res = await api.patients.approveSignal(patientId, signal)
     await refreshPatients()
+    return { dispatched: res.dispatched, dispatchError: (res as any).dispatchError }
   }
 
   return (
