@@ -44,7 +44,7 @@ async function bootstrap(): Promise<void> {
   app.listen(env.port, () => {
     console.log(`[SERVER] Toju API running on port ${env.port}`)
   })
-  initWhatsApp()
+  initWhatsApp().catch((err) => console.error('[WA] Init error:', err))
   startCronJobs()
 }
 

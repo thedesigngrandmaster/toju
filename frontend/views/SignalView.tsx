@@ -87,9 +87,15 @@ export default function SignalView({ patientId }: Props) {
     if (!signal || !createdPatientId) return
     setApproving(true)
     try {
-      await approveSignal(createdPatientId, signal)
-      toast.success('Signal verified — monitoring dispatched to patient via WhatsApp')
-      router.push('/dashboard')
+      const result = await approveSignal(createdPatientId, signal)
+      if (result.dispatched) {
+        toast.success('Signal verified — monitoring dispatched to patient via WhatsApp')
+        router.push('/dashboard')
+      } else {
+        toast.success('Signal verified and saved')
+        toast.error(result.dispatchError || 'WhatsApp message could not be sent. Go to Dashboard → WhatsApp to scan the QR code.', { duration: 6000 })
+        setTimeout(() => router.push('/dashboard'), 3000)
+      }
     } catch (err: any) {
       toast.error(err.message || 'Failed to approve signal')
     } finally {

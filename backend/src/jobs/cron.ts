@@ -24,6 +24,8 @@ export function startCronJobs(): void {
         await sendMessage(patient.phoneNumber, msg).catch((err: Error) =>
           console.error(`[CRON] WhatsApp failed for ${patient.name}:`, err.message)
         )
+        // 3-second gap between messages to avoid WhatsApp rate limiting
+        await new Promise((r) => setTimeout(r, 3000))
       }
       console.log(`[CRON] Sent check-ins to ${patients.length} patients`)
     } catch (err) {
