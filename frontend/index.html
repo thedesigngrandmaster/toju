@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5"
+    />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="color-scheme" content="light" />
+    <title>Toju — AI Post-Discharge Monitoring</title>
+    <meta
+      name="description"
+      content="Toju turns discharge notes into proactive, offline-first patient monitoring — closing the loop between hospital and home."
+    />
+
+    <!-- PWA / installability -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Toju" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Toju" />
+
+    <!-- iOS splash screens (best-effort; generated from brand colour) -->
+    <link rel="apple-touch-startup-image" href="/icons/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px)" />
+
+    <meta property="og:title" content="Toju — AI Post-Discharge Monitoring" />
+    <meta
+      property="og:description"
+      content="Offline-first, AI-powered post-discharge monitoring for low-resource clinical environments."
+    />
+    <meta property="og:image" content="/Image/opengraph.png" />
+    <meta property="og:type" content="website" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

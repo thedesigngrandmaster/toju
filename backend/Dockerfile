@@ -1,16 +1,18 @@
-FROM node:20-slim
+FROM node:22-bookworm-slim
 
-# Install Chromium + all deps whatsapp-web.js needs
-RUN apt-get update && apt-get install -y \
+# Chromium is required by whatsapp-web.js (Puppeteer). The API still starts and
+# keeps messages queued when WHATSAPP_ENABLED is false.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     ca-certificates \
     fonts-liberation \
-    libasound2t64 \
+    libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libcups2 \
     libdbus-1-3 \
-    libgdk-pixbuf2.0-0 \
+    libdrm2 \
+    libgbm1 \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
@@ -19,25 +21,22 @@ RUN apt-get update && apt-get install -y \
     libxdamage1 \
     libxrandr2 \
     xdg-utils \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CHROME_PATH=/usr/bin/chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV WHATSAPP_ENABLED=true
+ENV WHATSAPP_CHROME_PATH=/usr/bin/chromium
+ENV WHATSAPP_AUTH_PATH=/app/.wwebjs_auth
 
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+# Dependencies are installed with npm (the project is an npm workspace).
+COPY package*.json ./
+RUN npm install --ignore-scripts
 
-# Install dependencies
-COPY package.json ./
-RUN pnpm install --no-frozen-lockfile
-
-# Copy source and build
 COPY . .
-RUN pnpm build
+RUN npm run build && npm prune --omit=dev
 
 EXPOSE 4000
 

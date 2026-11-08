@@ -1,10 +1,10 @@
 import { Response } from 'express'
-import { Patient } from '../models/Patient'
 import { CheckIn } from '../models/CheckIn'
+import { findPatientForDoctor, toCheckInDTO } from '../services/serializers'
 import type { AuthRequest } from '../middleware/auth'
 
 export async function listCheckIns(req: AuthRequest, res: Response): Promise<void> {
-  const patient = await Patient.findOne({ _id: req.params.id, doctorId: req.doctorId }).lean()
+  const patient = await findPatientForDoctor(req.doctorId as string, req.params.id)
   if (!patient) {
     res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Patient not found' } })
     return
@@ -23,14 +23,7 @@ export async function listCheckIns(req: AuthRequest, res: Response): Promise<voi
   ])
 
   res.json({
-    checkIns: checkIns.map((c) => ({
-      id: c._id,
-      timestamp: c.timestamp,
-      message: c.message,
-      riskScore: c.riskScore,
-      triggeredFlags: c.triggeredFlags,
-      botResponse: c.botResponse,
-    })),
+    checkIns: checkIns.map((checkIn) => toCheckInDTO(checkIn, patient.clientId)),
     total,
     page,
     totalPages: Math.ceil(total / limit),

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: toju-backend
+    name: toju-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -11,8 +11,12 @@ services:
         value: 4000
       - key: NODE_ENV
         value: production
-      - key: CHROME_PATH
+      - key: WHATSAPP_ENABLED
+        value: true
+      - key: WHATSAPP_CHROME_PATH
         value: /usr/bin/chromium
+      - key: WHATSAPP_AUTH_PATH
+        value: /app/.wwebjs_auth
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: JWT_SECRET
@@ -29,12 +33,15 @@ services:
       sizeGB: 1
 
   - type: web
-    name: toju-frontend
-    runtime: node
+    name: toju-web
+    runtime: static
     rootDir: frontend
-    buildCommand: pnpm install && pnpm build
-    startCommand: pnpm start
-    plan: free
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
     envVars:
-      - key: NEXT_PUBLIC_API_URL
+      - key: VITE_API_URL
         sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

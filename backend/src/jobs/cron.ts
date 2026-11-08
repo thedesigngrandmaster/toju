@@ -1,35 +1,43 @@
 import cron from 'node-cron'
+import crypto from 'crypto'
 import { Patient } from '../models/Patient'
 import { Alert } from '../models/Alert'
-import { sendMessage, buildCheckInMessage, isWhatsAppReady } from '../services/whatsapp'
+import { buildCheckInMessage } from '../services/whatsapp'
+import { enqueueOutboundMessage } from '../services/outbound'
+import { recordAudit } from '../services/audit'
+
+function dayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10)
+}
 
 export function startCronJobs(): void {
   cron.schedule('0 7 * * *', async () => {
-    console.log('[CRON] Dispatching daily check-ins…')
-    if (!isWhatsAppReady()) {
-      console.warn('[CRON] WhatsApp not ready, skipping dispatch')
-      return
-    }
+    console.log('[CRON] Queueing daily check-ins…')
     try {
       const patients = await Patient.find({
         riskScore: { $in: ['green', 'yellow', 'red'] },
         'signal.approvedAt': { $ne: null },
       }).lean()
 
+      let queued = 0
       for (const patient of patients) {
-        const schedule = (patient.signal as any)?.monitoringSchedule ?? []
+        const schedule = patient.signal?.monitoringSchedule ?? []
         if (!schedule.length) continue
         const question = schedule[0].question
-        const msg = buildCheckInMessage(patient.name, question)
-        await sendMessage(patient.phoneNumber, msg).catch((err: Error) =>
-          console.error(`[CRON] WhatsApp failed for ${patient.name}:`, err.message)
-        )
-        // 3-second gap between messages to avoid WhatsApp rate limiting
-        await new Promise((r) => setTimeout(r, 3000))
+        await enqueueOutboundMessage({
+          idempotencyKey: `checkin:${patient.clientId}:${dayKey()}`,
+          doctorId: patient.doctorId,
+          patientId: patient._id,
+          phoneNumber: patient.phoneNumber,
+          body: buildCheckInMessage(patient.name, question),
+          kind: 'checkin',
+          priority: patient.riskScore === 'red' ? 90 : 20,
+        })
+        queued += 1
       }
-      console.log(`[CRON] Sent check-ins to ${patients.length} patients`)
-    } catch (err) {
-      console.error('[CRON] Daily dispatch error:', err)
+      console.log(`[CRON] Queued check-ins for ${queued} patients`)
+    } catch (error) {
+      console.error('[CRON] Daily dispatch error:', error)
     }
   })
 
@@ -43,6 +51,7 @@ export function startCronJobs(): void {
         $or: [{ lastCheckIn: null }, { lastCheckIn: { $lt: cutoff } }],
       }).lean()
 
+      let flagged = 0
       for (const patient of patients) {
         const existingAlert = await Alert.findOne({
           patientId: patient._id,
@@ -50,21 +59,38 @@ export function startCronJobs(): void {
           resolved: false,
           timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
         })
-        if (!existingAlert) {
-          await Alert.create({
-            patientId: patient._id,
-            doctorId: patient.doctorId,
-            type: 'missed_checkin',
-            message: `${patient.name} missed their daily check-in.`,
-          })
-          if (patient.riskScore === 'green') {
-            await Patient.updateOne({ _id: patient._id }, { riskScore: 'yellow' })
-          }
+        if (existingAlert) continue
+
+        await Alert.create({
+          clientId: crypto.randomUUID(),
+          patientId: patient._id,
+          doctorId: patient.doctorId,
+          type: 'missed_checkin',
+          message: `${patient.name} missed their daily check-in.`,
+          severity: 'warning',
+        })
+
+        if (patient.riskScore === 'green') {
+          await Patient.updateOne(
+            { _id: patient._id },
+            { $set: { riskScore: 'yellow' }, $inc: { serverVersion: 1 } }
+          )
         }
+
+        await recordAudit({
+          doctorId: String(patient.doctorId),
+          actor: 'system',
+          action: 'alert.missed_checkin',
+          entityType: 'patient',
+          entityId: patient.clientId,
+          summary: `${patient.name} missed their daily check-in`,
+          detail: { lastCheckIn: patient.lastCheckIn },
+        })
+        flagged += 1
       }
-      console.log(`[CRON] Flagged ${patients.length} missed check-ins`)
-    } catch (err) {
-      console.error('[CRON] Missed check-in error:', err)
+      console.log(`[CRON] Flagged ${flagged} missed check-ins`)
+    } catch (error) {
+      console.error('[CRON] Missed check-in error:', error)
     }
   })
 }

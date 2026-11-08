@@ -4,15 +4,21 @@ dotenv.config()
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
-import { env } from '../config/env'
+import { connectDB } from '../config/db'
+import { stopDevMongo } from '../config/memory-db'
 import { Hospital } from '../models/Hospital'
 import { Doctor } from '../models/Doctor'
 import { Patient } from '../models/Patient'
 import { CheckIn } from '../models/CheckIn'
 import { Alert } from '../models/Alert'
+import { Note } from '../models/Note'
+import { AuditLog } from '../models/AuditLog'
+import { SyncOperation } from '../models/SyncOperation'
+import { OutboundMessage } from '../models/OutboundMessage'
+import { InboundMessage } from '../models/InboundMessage'
 
 async function seed() {
-  await mongoose.connect(env.mongoUri)
+  await connectDB()
   console.log('[SEED] Connected to MongoDB')
 
   await Promise.all([
@@ -21,6 +27,11 @@ async function seed() {
     Patient.deleteMany({}),
     CheckIn.deleteMany({}),
     Alert.deleteMany({}),
+    Note.deleteMany({}),
+    AuditLog.deleteMany({}),
+    SyncOperation.deleteMany({}),
+    OutboundMessage.deleteMany({}),
+    InboundMessage.deleteMany({}),
   ])
   console.log('[SEED] Cleared existing data')
 
@@ -80,6 +91,13 @@ async function seed() {
       confidence: 0.95,
       approvedAt: new Date('2026-02-18T14:30:00Z'),
       approvedBy: doctor._id,
+      provenance: {
+        model: 'gemini-2.5-flash',
+        promptVersion: 'signal-extraction@2.1.0',
+        generatedAt: new Date('2026-02-18T14:20:00Z'),
+        source: 'gemini',
+        confidence: 0.95,
+      },
     },
   })
 
@@ -119,6 +137,13 @@ async function seed() {
       confidence: 0.93,
       approvedAt: new Date('2026-02-17T11:00:00Z'),
       approvedBy: doctor._id,
+      provenance: {
+        model: 'gemini-2.5-flash',
+        promptVersion: 'signal-extraction@2.1.0',
+        generatedAt: new Date('2026-02-17T10:45:00Z'),
+        source: 'gemini',
+        confidence: 0.93,
+      },
     },
   })
 
@@ -158,6 +183,13 @@ async function seed() {
       confidence: 0.97,
       approvedAt: new Date('2026-02-19T10:15:00Z'),
       approvedBy: doctor._id,
+      provenance: {
+        model: 'gemini-2.5-flash',
+        promptVersion: 'signal-extraction@2.1.0',
+        generatedAt: new Date('2026-02-19T10:00:00Z'),
+        source: 'gemini',
+        confidence: 0.97,
+      },
     },
   })
 
@@ -243,6 +275,26 @@ async function seed() {
       type: 'missed_checkin',
       message: 'Patient missed 2 consecutive daily check-ins.',
       resolved: false,
+      severity: 'warning',
+    },
+  ])
+
+  await Note.insertMany([
+    {
+      clientId: crypto.randomUUID(),
+      patientId: p1._id,
+      doctorId: doctor._id,
+      authorId: String(doctor._id),
+      authorName: doctor.name,
+      body: 'Patient called the clinic line. Advised to reduce fluid intake and weigh daily. Cardiology review remains scheduled.',
+    },
+    {
+      clientId: crypto.randomUUID(),
+      patientId: p2._id,
+      doctorId: doctor._id,
+      authorId: String(doctor._id),
+      authorName: doctor.name,
+      body: 'Discussed insulin technique and missed-dose plan. Patient to send morning glucose readings for the next 3 days.',
     },
   ])
 
@@ -252,8 +304,10 @@ async function seed() {
   console.log('  - 4 patients (Emmanuel, Fatima, Chukwuemeka, Aisha)')
   console.log('  - 5 check-ins')
   console.log('  - 2 alerts')
+  console.log('  - 2 clinical notes')
 
   await mongoose.disconnect()
+  await stopDevMongo()
   process.exit(0)
 }
 

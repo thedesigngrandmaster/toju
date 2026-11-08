@@ -3,9 +3,14 @@ node_modules
 .pnp
 .pnp.*
 
-# Next.js
+# Vite build output
+frontend/dist/
+frontend/.vite/
+
+# Legacy Next.js artifacts
 frontend/.next/
 frontend/out/
+frontend/next-env.d.ts
 
 # Backend build
 backend/dist/
@@ -26,16 +31,18 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# vercel
+# vercel / render
 .vercel
 
-# next-env (auto-generated)
-
-# WhatsApp Web.js session data
+# WhatsApp Web.js session and cache data
 backend/.wwebjs_auth/
 backend/.wwebjs_cache/
+
+# Local development database fallback
+backend/.mongo-data/
+backend/.mongo-uri
+backend/.mongo-libs/
 
 # IDE / AI
 .cursor/
 .claude/
-frontend/next-env.d.ts

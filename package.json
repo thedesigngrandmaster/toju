@@ -1,12 +1,30 @@
 {
-  "name": "carebridge-sentinel",
-  "version": "0.1.0",
+  "name": "toju",
+  "version": "1.0.0",
   "private": true,
+  "description": "Toju — offline-first post-discharge patient monitoring PWA",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "pnpm --parallel -r dev",
-    "dev:fe": "pnpm --filter carebridge-frontend dev",
-    "dev:be": "pnpm --filter carebridge-backend dev",
-    "build": "pnpm --filter carebridge-frontend build",
-    "install:all": "pnpm install"
+    "dev": "node scripts/dev.mjs",
+    "dev:services": "concurrently --kill-others-on-fail -n api,web -c magenta,cyan \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "dev:api": "npm run dev --workspace backend",
+    "dev:web": "npm run dev --workspace frontend",
+    "build": "npm run build --workspace frontend && npm run build --workspace backend",
+    "build:web": "npm run build --workspace frontend",
+    "build:api": "npm run build --workspace backend",
+    "typecheck": "npm run typecheck --workspace frontend && npm run build --workspace backend",
+    "seed": "node scripts/seed.mjs",
+    "start": "npm run start --workspace backend",
+    "preview": "npm run preview --workspace frontend",
+    "install:all": "npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,166 +1,329 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  DisconnectReason,
-  type WASocket,
-  type WAMessage,
-} from '@whiskeysockets/baileys'
-import { Boom } from '@hapi/boom'
+import crypto from 'crypto'
+import { Client, LocalAuth, type Message } from 'whatsapp-web.js'
+import { env } from '../config/env'
 import { Patient } from '../models/Patient'
 import { CheckIn } from '../models/CheckIn'
 import { Alert } from '../models/Alert'
+import { InboundMessage } from '../models/InboundMessage'
 import { analyzeCheckIn } from './ai'
+import { enqueueOutboundMessage, startOutboundProcessor } from './outbound'
+import { recordAudit } from './audit'
+import { normalizePhone, toChatId, toDisplayPhone } from '../utils/phone'
 
-let sock: WASocket | null = null
+export type WhatsAppState =
+  | 'disabled'
+  | 'starting'
+  | 'qr'
+  | 'ready'
+  | 'auth_failure'
+  | 'disconnected'
+
+let client: Client | null = null
 let latestQr: string | null = null
-let isReady = false
+let state: WhatsAppState = 'starting'
 let initializing = false
+let lastError: string | null = null
 
 export function getLatestQr(): string | null {
   return latestQr
 }
 
 export function isWhatsAppReady(): boolean {
-  return isReady
+  return state === 'ready'
 }
 
+export function getWhatsAppState(): WhatsAppState {
+  return state
+}
+
+export function getWhatsAppLastError(): string | null {
+  return lastError
+}
+
+/** Sends immediately through the linked device. Throws when not connected. */
 export async function sendMessage(phoneNumber: string, message: string): Promise<void> {
-  if (!sock || !isReady) {
-    throw new Error('WhatsApp client is not connected. Go to Dashboard → WhatsApp to scan the QR code.')
+  if (!client || state !== 'ready') {
+    throw new Error('WhatsApp client is not connected. Open Dashboard → WhatsApp to link the device.')
   }
-  const jid = phoneNumber.replace('+', '') + '@s.whatsapp.net'
-  await sock.sendMessage(jid, { text: message })
+  const chatId = toChatId(phoneNumber)
+  if (!normalizePhone(phoneNumber)) throw new Error('Invalid phone number')
+  await client.sendMessage(chatId, message)
 }
 
 export function buildCheckInMessage(patientName: string, question: string): string {
   return `Good morning ${patientName}! 👋\n\n${question}\n\nReply to this message with your answer.\n\n_Toju — Your health partner_`
 }
 
-async function handleInboundMessage(msg: WAMessage) {
-  const sender = msg.key.remoteJid
-  if (!sender || msg.key.fromMe || sender === 'status@broadcast') return
+function riskRank(risk: string): number {
+  return risk === 'red' ? 3 : risk === 'yellow' ? 2 : risk === 'green' ? 1 : 0
+}
 
-  const text =
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    ''
-  if (!text) return
+/**
+ * Persists the inbound message first, then triages it. If anything after the
+ * first write fails, the message remains in InboundMessage for inspection and
+ * retry instead of disappearing with the socket event.
+ */
+async function handleInboundMessage(message: Message): Promise<void> {
+  try {
+    if (message.fromMe) return
+    const from = message.from ?? ''
+    if (!from || from.endsWith('@g.us') || from.includes('status@broadcast') || from.includes('broadcast')) {
+      return
+    }
 
-  const phone = '+' + sender.replace('@s.whatsapp.net', '')
-  const patient = await Patient.findOne({ phoneNumber: phone })
-  if (!patient) return
+    const body = (message.body ?? '').trim() ||
+      ((message as unknown as { hasMedia?: boolean }).hasMedia
+        ? `[Patient sent a ${message.type || 'media'} message]`
+        : '')
+    if (!body) return
 
-  if (!patient.signal || !patient.signal.approvedAt) {
-    await sock?.sendMessage(sender, {
-      text: `Hello! Your care plan is being set up by your doctor. We will reach out to you once everything is ready. 🙏`,
+    const providerMessageId = message.id?._serialized ?? crypto.randomUUID()
+    const digits = normalizePhone(from.split('@')[0])
+    const phoneNumber = toDisplayPhone(digits)
+
+    const inbound = await InboundMessage.findOneAndUpdate(
+      { providerMessageId },
+      {
+        $setOnInsert: {
+          providerMessageId,
+          phoneNumber,
+          body,
+          receivedAt: new Date(),
+          processed: false,
+        },
+      },
+      { upsert: true, new: true }
+    )
+
+    // Duplicate delivery of a message we already triaged.
+    if (inbound.processed) return
+
+    const patient = await Patient.findOne({
+      $or: [
+        { phoneNumber },
+        { phoneNumber: digits },
+        { phoneNumber: new RegExp(`${digits}$`) },
+      ],
     })
-    return
-  }
 
-  const redFlags = (patient.signal as any).redFlags ?? []
-  const medications = ((patient.signal as any).medications ?? []).map(
-    (m: any) => `${m.name} ${m.dose} ${m.frequency}`
-  )
-  const analysis = await analyzeCheckIn(
-    text,
-    redFlags,
-    patient.name,
-    patient.diagnosis,
-    medications
-  )
+    if (!patient) {
+      inbound.doctorId = null
+      inbound.patientId = null
+      inbound.error = 'No registered patient matches this phone number'
+      inbound.processed = true
+      inbound.processedAt = new Date()
+      await inbound.save()
+      return
+    }
 
-  await CheckIn.create({
-    patientId: patient._id,
-    doctorId: patient.doctorId,
-    message: text,
-    riskScore: analysis.riskScore,
-    triggeredFlags: analysis.triggeredFlags,
-    botResponse: analysis.botResponse,
-  })
+    inbound.doctorId = patient.doctorId
+    inbound.patientId = patient._id
+    await inbound.save()
 
-  patient.riskScore = analysis.riskScore
-  patient.lastCheckIn = new Date()
-  await patient.save()
+    if (!patient.signal?.approvedAt) {
+      await enqueueOutboundMessage({
+        idempotencyKey: `unregistered-plan:${providerMessageId}`,
+        doctorId: patient.doctorId,
+        patientId: patient._id,
+        phoneNumber: patient.phoneNumber,
+        body: 'Hello! Your care plan is being set up by your doctor. We will reach out to you once everything is ready. 🙏',
+        kind: 'triage-reply',
+        priority: 60,
+      })
+      inbound.processed = true
+      inbound.processedAt = new Date()
+      inbound.error = 'Care signal not approved yet'
+      await inbound.save()
+      return
+    }
 
-  if (analysis.riskScore === 'red') {
-    await Alert.create({
+    const redFlags = (patient.signal.redFlags ?? []) as string[]
+    const medications = (patient.signal.medications ?? []).map(
+      (med) => `${med.name} ${med.dose} ${med.frequency}`
+    )
+
+    const analysis = await analyzeCheckIn(
+      body,
+      redFlags,
+      patient.name,
+      patient.diagnosis,
+      medications,
+      patient.language
+    )
+
+    const checkIn = await CheckIn.create({
+      clientId: crypto.randomUUID(),
       patientId: patient._id,
       doctorId: patient.doctorId,
-      type: 'red_flag',
-      message: `Red flag triggered: ${analysis.triggeredFlags.join(', ')}`,
+      timestamp: inbound.receivedAt,
+      message: body,
+      riskScore: analysis.riskScore,
+      triggeredFlags: analysis.triggeredFlags,
+      botResponse: analysis.botResponse,
+      aiStatus: 'ready',
+      provenance: analysis.provenance,
+      source: 'whatsapp',
+      serverVersion: 1,
     })
-  }
 
-  await sock?.sendMessage(sender, { text: analysis.botResponse })
+    const currentRisk = patient.riskScore
+    const nextRisk =
+      riskRank(analysis.riskScore) >= riskRank(currentRisk) ? analysis.riskScore : currentRisk
+    patient.riskScore = nextRisk
+    patient.lastCheckIn = new Date()
+    patient.serverVersion += 1
+    await patient.save()
+
+    if (analysis.riskScore === 'red') {
+      await Alert.create({
+        clientId: crypto.randomUUID(),
+        patientId: patient._id,
+        doctorId: patient.doctorId,
+        timestamp: new Date(),
+        type: 'red_flag',
+        message: `RED alert from WhatsApp: ${
+          analysis.triggeredFlags.length ? analysis.triggeredFlags.join(', ') : 'urgent symptom'
+        } — "${body.slice(0, 160)}"`,
+        resolved: false,
+        severity: 'critical',
+        serverVersion: 1,
+      })
+    }
+
+    await enqueueOutboundMessage({
+      idempotencyKey: `reply:${providerMessageId}`,
+      doctorId: patient.doctorId,
+      patientId: patient._id,
+      phoneNumber: patient.phoneNumber,
+      body: analysis.botResponse,
+      kind: 'triage-reply',
+      priority: analysis.riskScore === 'red' ? 100 : 25,
+    })
+
+    inbound.processed = true
+    inbound.processedAt = new Date()
+    inbound.riskScore = analysis.riskScore
+    inbound.triggeredFlags = analysis.triggeredFlags
+    inbound.checkInId = checkIn.clientId
+    inbound.error = null
+    await inbound.save()
+
+    await recordAudit({
+      doctorId: String(patient.doctorId),
+      actor: 'ai',
+      action: 'triage.inbound_completed',
+      entityType: 'checkin',
+      entityId: checkIn.clientId,
+      summary: `WhatsApp triage classified ${patient.name} as ${analysis.riskScore.toUpperCase()}`,
+      promptVersion: analysis.provenance.promptVersion,
+      model: analysis.provenance.model,
+      detail: {
+        patientId: patient.clientId,
+        riskScore: analysis.riskScore,
+        triggeredFlags: analysis.triggeredFlags,
+        providerMessageId,
+      },
+    })
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : 'Inbound processing failed'
+    console.error('[WA] Inbound processing failed:', messageText)
+    // Keep the inbound row unprocessed so it can be retried; never delete it.
+    try {
+      const providerMessageId = message.id?._serialized
+      if (providerMessageId) {
+        await InboundMessage.updateOne(
+          { providerMessageId },
+          { $set: { processed: false, error: messageText } }
+        )
+      }
+    } catch {
+      /* ignore secondary failure */
+    }
+  }
 }
 
 export async function initWhatsApp(): Promise<void> {
-  if (initializing) {
-    console.warn('[WA] Already initializing, skipping duplicate call')
+  if (!env.whatsappEnabled) {
+    state = 'disabled'
+    console.warn('[WA] Disabled by WHATSAPP_ENABLED=false. Outbound messages remain queued.')
     return
   }
+  if (initializing || state === 'ready') return
   initializing = true
 
   try {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
-    const { version } = await fetchLatestBaileysVersion()
-
-    sock = makeWASocket({
-      version,
-      auth: state,
+    client = new Client({
+      authStrategy: new LocalAuth({
+        clientId: 'toju',
+        dataPath: env.whatsappAuthPath,
+      }),
+      puppeteer: {
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+        ...(env.whatsappChromePath ? { executablePath: env.whatsappChromePath } : {}),
+      },
     })
 
-    sock.ev.on('creds.update', saveCreds)
-
-    sock.ev.on('connection.update', (update) => {
-      const { connection, lastDisconnect, qr } = update
-
-      if (qr) {
-        latestQr = qr
-        console.log('[WA] QR code generated — scan it to connect')
-      }
-
-      if (connection === 'open') {
-        isReady = true
-        latestQr = null
-        initializing = false
-        console.log('[WA] WhatsApp client connected and ready')
-      }
-
-      if (connection === 'close') {
-        isReady = false
-        latestQr = null
-        initializing = false
-
-        const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-        const loggedOut = statusCode === DisconnectReason.loggedOut
-
-        if (loggedOut) {
-          console.warn('[WA] Logged out — delete auth_info/ and restart to re-scan QR')
-          sock = null
-        } else {
-          console.warn('[WA] Disconnected (code ' + statusCode + '), reconnecting in 5s…')
-          sock = null
-          setTimeout(() => {
-            if (!initializing) initWhatsApp()
-          }, 5000)
-        }
-      }
+    client.on('qr', (qr) => {
+      latestQr = qr
+      state = 'qr'
+      lastError = null
+      console.log('[WA] QR code generated — link the device from Dashboard → WhatsApp')
     })
 
-    sock.ev.on('messages.upsert', ({ messages }) => {
-      for (const msg of messages) {
-        handleInboundMessage(msg).catch((err) =>
-          console.error('[WA] Error handling message:', err)
-        )
-      }
+    client.on('authenticated', () => {
+      latestQr = null
+      state = 'starting'
+      console.log('[WA] Authenticated; waiting for ready state')
     })
 
-    console.log('[WA] Initializing WhatsApp client…')
-  } catch (err: any) {
-    console.error('[WA] Failed to initialize:', err.message)
-    console.warn('[WA] Server will continue without WhatsApp. Fix the issue and restart.')
-    isReady = false
+    client.on('auth_failure', (reason) => {
+      state = 'auth_failure'
+      lastError = typeof reason === 'string' ? reason : 'Authentication failed'
+      initializing = false
+      console.error('[WA] Authentication failed:', lastError)
+    })
+
+    client.on('ready', () => {
+      state = 'ready'
+      latestQr = null
+      lastError = null
+      initializing = false
+      console.log('[WA] WhatsApp client connected and ready')
+      startOutboundProcessor(sendMessage)
+    })
+
+    client.on('disconnected', (reason) => {
+      state = 'disconnected'
+      latestQr = null
+      initializing = false
+      lastError = typeof reason === 'string' ? reason : 'Disconnected'
+      console.warn('[WA] Disconnected:', lastError)
+      // Recreate the client after a delay; LocalAuth keeps the session.
+      setTimeout(() => {
+        if (!initializing && state !== 'ready') void initWhatsApp()
+      }, 10_000)
+    })
+
+    client.on('message', (message) => {
+      void handleInboundMessage(message)
+    })
+
+    console.log('[WA] Initializing WhatsApp Web client…')
+    await client.initialize()
+  } catch (error) {
+    state = 'disconnected'
     initializing = false
+    lastError = error instanceof Error ? error.message : 'WhatsApp initialization failed'
+    console.error('[WA] Failed to initialize:', lastError)
+    console.warn('[WA] Server will continue without WhatsApp. Outbound messages stay queued.')
+    setTimeout(() => {
+      if (!initializing && state !== 'ready') void initWhatsApp()
+    }, 15_000)
   }
 }

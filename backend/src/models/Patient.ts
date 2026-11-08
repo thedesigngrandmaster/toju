@@ -1,4 +1,5 @@
 import { Schema, model, Document, Types } from 'mongoose'
+import { ProvenanceSchema, type IProvenance } from './Provenance'
 
 // ── Subdocument interfaces ────────────────────────────────────────────────────
 
@@ -26,6 +27,7 @@ export interface IClinicalSignal {
   confidence: number
   approvedAt: Date | null
   approvedBy: Types.ObjectId | string | null
+  provenance?: IProvenance | null
 }
 
 // ── Subdocument schemas ───────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ const ClinicalSignalSchema = new Schema<IClinicalSignal>(
     confidence: { type: Number, required: true },
     approvedAt: { type: Date, default: null },
     approvedBy: { type: Schema.Types.ObjectId, ref: 'Doctor', default: null },
+    provenance: { type: ProvenanceSchema, default: null },
   },
   { _id: false }
 )
@@ -75,6 +78,8 @@ export type RiskScore = 'red' | 'yellow' | 'green' | 'unmonitored'
 export type PatientLanguage = 'english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa'
 
 export interface IPatient extends Document {
+  /** Stable client-generated id. The PWA never has to learn a Mongo ObjectId. */
+  clientId: string
   doctorId: Types.ObjectId
   hospitalId: Types.ObjectId
   name: string
@@ -88,12 +93,14 @@ export interface IPatient extends Document {
   signal: IClinicalSignal | null
   lastCheckIn: Date | null
   checkInToken: string
+  serverVersion: number
   createdAt: Date
   updatedAt: Date
 }
 
 const PatientSchema = new Schema<IPatient>(
   {
+    clientId: { type: String, required: true, default: () => new Types.ObjectId().toString() },
     doctorId: { type: Schema.Types.ObjectId, ref: 'Doctor', required: true },
     hospitalId: { type: Schema.Types.ObjectId, ref: 'Hospital', required: true },
     name: { type: String, required: true },
@@ -115,12 +122,13 @@ const PatientSchema = new Schema<IPatient>(
     signal: { type: ClinicalSignalSchema, default: null },
     lastCheckIn: { type: Date, default: null },
     checkInToken: { type: String, required: true, unique: true },
+    serverVersion: { type: Number, default: 1 },
   },
   {
     timestamps: true,
     toJSON: {
       transform(_doc, ret: Record<string, any>) {
-        ret.id = ret._id
+        ret.id = ret.clientId ?? ret._id
         delete ret._id
         delete ret.__v
       },
@@ -128,7 +136,10 @@ const PatientSchema = new Schema<IPatient>(
   }
 )
 
+PatientSchema.index({ doctorId: 1, clientId: 1 }, { unique: true })
 PatientSchema.index({ doctorId: 1, riskScore: 1 })
+PatientSchema.index({ doctorId: 1, updatedAt: -1 })
 PatientSchema.index({ hospitalId: 1 })
+PatientSchema.index({ phoneNumber: 1 })
 
 export const Patient = model<IPatient>('Patient', PatientSchema)

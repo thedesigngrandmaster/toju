@@ -1,419 +1,397 @@
-# Toju — AI-Powered Post-Discharge Patient Monitoring
+# Toju — Offline-First Post-Discharge Monitoring
 
-> **Hackathon Theme: Data to Prevention · AI as a Partner**
+> “Toju” means *“take care of this”* in Yoruba. Toju keeps watching a patient after the hospital stops watching them.
 
-> "Toju" means *"take care of this"* in Yoruba. That is exactly what the system does — it takes care of patients after the hospital can no longer watch over them.
+Toju is a **local-first PWA for clinicians** and a **durable WhatsApp bridge for patients**. Clinicians review AI-extracted discharge signals, triage daily check-ins, resolve alerts, and write notes even when the network drops. Patient messages are persisted before triage, and every outbound WhatsApp message goes through a durable server-side outbox.
 
----
-
-## The Problem Is Not Just the Discharge Gap
-
-Everyone knows about readmission rates. What nobody talks about is **the information blackout** that causes them.
-
-A patient is treated, stabilised, and discharged. The doctor moves on to the next admission within minutes. The patient goes home. And then — silence.
-
-No data flows back. Not because the patient doesn't have concerns, but because there is no channel for those concerns to reach anyone who can act on them. When something goes wrong at home, the patient's only options are to travel back to a hospital (often hours away) or wait and hope.
-
-By the time the hospital sees that patient again, a preventable complication has become an emergency admission.
-
-**This is not a treatment problem. It is a data problem.**
-
-- Readmission rates at Nigerian tertiary hospitals exceed **15%** within 30 days of discharge
-- **80% of post-discharge complications** show early warning symptoms in the 24–48 hours before crisis
-- Doctors have no infrastructure to receive those signals — not because of negligence, but because the tools don't exist
-- The patient already has a smartphone. The doctor already has a dashboard. **Nothing connects them.**
+**Hackathon theme:** *Data to Prevention · AI as a Partner*
 
 ---
 
-## The Solution: Close the Loop
+## Stack
 
-Most healthtech responses to this problem build a **one-way street**: hospital sends reminders to patient. That is a glorified notification system. It does not prevent anything.
+| Layer | Technology |
+| --- | --- |
+| Frontend | **Vite + React 19 + TypeScript** |
+| Styling | Tailwind CSS v4 |
+| Local data | **Dexie / IndexedDB** |
+| Offline sync | Custom delta sync with a durable outbox |
+| PWA | `vite-plugin-pwa` with an inject-manifest service worker |
+| Backend | **Node.js + Express + TypeScript** |
+| Database | **MongoDB + Mongoose** |
+| AI | **Gemini 2.5 Flash** (`@google/genai`) with deterministic server rules as a fallback |
+| WhatsApp | **whatsapp-web.js** (`LocalAuth`) |
+| Workspace | **npm workspaces** (no pnpm, no Next.js) |
 
-Toju is built around a single insight: **prevention requires a return signal**.
+The old Next.js frontend and pnpm workspace have been removed. The root is a single npm workspace containing `frontend/` and `backend/`.
 
-You have to make the patient's reply — their words, in their language, from their phone — flow back through an AI that understands their clinical context and surface the risk to the doctor before it becomes a crisis.
+---
 
-That is the loop. That is prevention.
+## Quick start
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        THE TOJU LOOP                                │
-│                                                                     │
-│   Doctor               System                      Patient          │
-│     │                    │                              │           │
-│     ├── Paste EMR ──────►│                              │           │
-│     │                    ├── Gemini extracts signal     │           │
-│     │◄── Review ─────────┤                              │           │
-│     ├── Approve ────────►│                              │           │
-│     │                    ├── WhatsApp: "Hello..." ─────►│           │
-│     │                    │                              │           │
-│     │              [7 AM daily]                         │           │
-│     │                    ├── "How are you feeling?" ───►│           │
-│     │                    │◄── "chest feels tight" ──────┤           │
-│     │                    │                              │           │
-│     │                    ├── Gemini: Risk = RED         │           │
-│     │                    ├── Alert fired                │           │
-│     │◄── RED ALERT ──────┤                              │           │
-│     │                    ├── "Go to hospital now" ─────►│           │
-│     │                    │                              │           │
-└─────────────────────────────────────────────────────────────────────┘
+### Requirements
+
+- Node.js **20+** (Node 22 recommended)
+- npm **10+**
+- MongoDB is optional for local development. A file-backed MongoDB fallback starts automatically when `MONGODB_URI` is not set.
+- Chrome/Chromium is optional. WhatsApp stays disabled unless `WHATSAPP_ENABLED=true`.
+
+### Install and run
+
+```bash
+npm install
+npm run dev
 ```
 
-**The left side** (Doctor → Patient) is a notification system.
-**The right side** (Patient → AI → Doctor) is **prevention**.
+Open **http://localhost:5173**. The API runs on **http://localhost:4000**.
 
-Toju builds both — and the right side is what wins.
+`npm run dev` starts:
 
----
+- the Express API with `ts-node-dev`
+- the Vite dev server with the `/v1` and `/health` proxy
+- the development MongoDB fallback, if no real `MONGODB_URI` is configured
 
-## What Is Already Built (The MVP)
+The first run of the fallback downloads MongoDB 4.4 and, on Linux x64 systems that only ship `libssl3`, a private copy of `libssl1.1`. These files are cached under `backend/.mongo-data/` and `backend/.mongo-libs/` and are gitignored. Data survives restarts.
 
-### EMR Signal Extraction — Hospital → AI
-The doctor pastes raw discharge notes into Toju. Gemini AI reads the clinical text and extracts a structured **Clinical Signal** in seconds:
+To use a real database instead:
 
-- Primary diagnosis
-- Every medication with dose, frequency, and status (started / continued / stopped / adjusted), each with an AI confidence score
-- Clinical red flags to watch for — the specific symptoms that should trigger an alert
-- A personalised daily check-in question for this patient's specific condition
-- A plain-language patient summary (5th-grade reading level, in the patient's language)
-- Patient age extracted from notes
-
-The doctor sees the extracted signal side-by-side with the raw notes in a split review panel, edits anything, and approves. One click. The AI did the clinical structuring work.
-
-### ✅ Outbound WhatsApp Bot — System → Patient
-The moment the signal is approved:
-1. The patient receives a WhatsApp message from Toju introducing itself
-2. Every morning at **7 AM**, the personalised check-in question goes out automatically
-3. If the patient does not reply by 10 AM, a **missed check-in alert** fires and their risk escalates automatically
-
-The bot uses `whatsapp-web.js` — a real WhatsApp session, not the Business API. No approval process. No per-message cost. Works on any existing WhatsApp number.
-
-### ✅ The Return Loop — Patient → AI → Doctor
-When the patient replies via WhatsApp:
-
-1. Gemini reads the message **in the context of their specific clinical situation** — it knows their diagnosis, their medications, and exactly which symptoms were flagged as danger signs by their discharging doctor
-2. It outputs a risk classification (`red` / `yellow` / `green`), the specific red flags that were triggered, and an empathetic bot response in the patient's language
-3. The check-in is recorded in the database with full AI analysis
-4. If the risk is `red`, an alert is fired immediately — the doctor sees it on their dashboard
-5. The bot replies to the patient: if green, a care tip; if yellow, gentle guidance; if red, a clear instruction to seek emergency help
-
-### ✅ Live Clinical Dashboard — AI → Doctor
-The doctor's dashboard shows every patient sorted by risk. Red patients surface to the top. Unresolved alerts appear in a banner. The dashboard polls every 30 seconds for updates.
-
----
-
-## Architecture
-
-```
-selora/
-├── frontend/                    # Next.js provider dashboard
-│   ├── app/                     # App Router pages + layout
-│   ├── views/
-│   │   ├── LandingView.tsx
-│   │   ├── DashboardView.tsx    # Patient table + alert banner, 30s polling
-│   │   ├── PatientDetailView.tsx # Check-in history + alert timeline
-│   │   ├── SignalView.tsx       # Signal extraction + split review panel
-│   │   └── auth/LoginView.tsx
-│   ├── components/
-│   │   ├── provider/            # Sidebar, PatientTable, AlertBanner, SignalSummary
-│   │   └── signal/              # NotesUploadArea (AI loading overlay), SplitReview
-│   ├── context/PatientsContext  # Global state + data fetching
-│   └── lib/api.ts               # Typed fetch client
-│
-└── backend/                     # Node.js + Express API
-    └── src/
-        ├── config/              # env.ts, db.ts
-        ├── models/              # Hospital, Doctor, Patient, CheckIn, Alert
-        ├── controllers/         # auth, patients, checkin, alerts
-        ├── services/
-        │   ├── ai.ts            # Gemini: extractSignal + analyzeCheckIn
-        │   └── whatsapp.ts      # Bot: send, receive, handle inbound
-        ├── jobs/cron.ts         # 7 AM dispatch + 10 AM missed check-in
-        ├── middleware/auth.ts
-        └── routes/index.ts
+```bash
+cp backend/.env.example backend/.env
+# edit backend/.env and set MONGODB_URI
 ```
 
----
+A real `MONGODB_URI` always wins over the fallback.
 
-## Tech Stack
+### Seed demo data
 
-### Frontend
-| Technology | Role |
-|---|---|
-| **Next.js 16** (App Router) | Framework, SSR |
-| **React 19** | UI library |
-| **TypeScript** | End-to-end type safety |
-| **Tailwind CSS v4** | Styling |
-| **NextUI v2** | Component system |
-| **Framer Motion** | Animations |
-| **Formik + Yup** | Form handling and validation |
-| **React Hot Toast** | Notifications |
-| **Lucide React** | Icons |
-
-### Backend
-| Technology | Role |
-|---|---|
-| **Node.js + Express** | API server |
-| **TypeScript** | Type safety |
-| **MongoDB + Mongoose** | Database and ODM |
-| **JWT + bcrypt** | Auth — access tokens + hashed refresh tokens |
-| **cookie-parser** | Secure HttpOnly refresh cookie |
-| **node-cron** | 7 AM dispatch, 10 AM missed check-in |
-
-### AI — Google Gemini
-
-Gemini is the core intelligence layer. It is used for two distinct tasks:
-
-| Task | Model | Prompt Role | Output |
-|---|---|---|---|
-| **EMR Signal Extraction** | Gemini 2.5 Flash | Clinical Data Extractor | Structured JSON: diagnosis, medications, red flags, monitoring schedule, patient summary |
-| **Check-in Triage** | Gemini 2.5 Flash | Triage Nurse | `{ riskScore, triggeredFlags[], botResponse }` |
-
-The triage prompt is context-aware: Gemini receives the patient's diagnosis, their full medication list, and the specific red flags their doctor marked — before it reads the patient's message. This is not generic sentiment analysis. It is personalised clinical triage at scale.
-
-### WhatsApp Bot
-| Technology | Role |
-|---|---|
-| **whatsapp-web.js** | WhatsApp Web automation via Puppeteer |
-| **Chromium** (Docker) | Headless browser for the session |
-| **LocalAuth** | Persistent session — survives server restarts |
-| **qrcode-terminal** | QR display in logs for initial setup |
-
-### Infrastructure
-| Technology | Role |
-|---|---|
-| **Railway** | Backend (Docker, persistent disk for WhatsApp session) |
-| **Vercel** | Frontend |
-| **MongoDB Atlas** | Cloud database |
-
----
-
-## Data Models
-
-### Patient
-```typescript
-{
-  doctorId, hospitalId,
-  name, age, phoneNumber,
-  language: 'english' | 'pidgin' | 'yoruba' | 'igbo' | 'hausa',
-  diagnosis, admittedDate, dischargedDate,
-  riskScore: 'red' | 'yellow' | 'green' | 'unmonitored',
-  lastCheckIn: Date | null,
-  checkInToken: string,
-  signal: {
-    patientSummary: string,        // plain-language, patient-facing
-    rawNotes: string,              // original EMR text
-    medications: [{
-      name, dose, frequency,
-      status: 'continued' | 'started' | 'stopped' | 'adjusted',
-      confidence: number           // AI confidence 0–1
-    }],
-    redFlags: string[],            // exact trigger conditions for RED
-    monitoringSchedule: [{
-      question: string,            // what the bot asks every morning
-      frequency: 'daily' | 'weekly' | 'as_needed',
-      time: string | null
-    }],
-    diagnosis: string,
-    confidence: number,
-    approvedAt: Date | null,
-    approvedBy: DoctorId | null
-  }
-}
+```bash
+npm run seed
 ```
 
-### CheckIn
-One record per patient WhatsApp reply — the core data asset of the return loop.
-```typescript
-{
-  patientId, doctorId, timestamp,
-  message: string,               // raw patient message
-  riskScore: 'red' | 'yellow' | 'green',
-  triggeredFlags: string[],      // which red flags Gemini matched
-  botResponse: string            // what Toju replied to the patient
-}
+Demo credentials:
+
+```text
+Email:    dr.kunle@lagos.hospital.ng
+Password: demo2026
 ```
 
-### Alert
-Raised automatically — never manually. Two types:
-```typescript
-{
-  patientId, doctorId, timestamp,
-  type: 'red_flag' | 'missed_checkin',
-  message: string,
-  resolved: boolean,
-  resolvedAt: Date | null
-}
+The seed creates one hospital, one doctor, four patients, check-ins, alerts, and clinical notes. Running it again replaces the demo collections.
+
+### Production build
+
+```bash
+npm run build
 ```
+
+This type-checks the frontend, builds the PWA, and compiles the backend. The PWA output is `frontend/dist/` (including `dist/sw.js` and `dist/manifest.webmanifest`); the API output is `backend/dist/`.
 
 ---
 
-## AI Prompts
+## Root scripts
 
-### Signal Extraction Prompt
-Gemini is instructed to act as a **clinical AI assistant**. It receives raw EMR notes and is asked to return only valid JSON — no markdown, no explanation. The output schema includes age, patient summary, diagnosis, medications (with AI confidence per drug), red flags, and a monitoring schedule with specific WhatsApp-ready questions.
-
-The AI assigns a `confidence` score to the whole extraction and to each medication individually — giving the doctor a signal of how much to trust each field before approving.
-
-### Check-in Triage Prompt
-Gemini receives:
-- The patient's first name
-- Their diagnosis
-- Their full medication list (name, dose, frequency)
-- The exact red flags their doctor specified at discharge
-- The patient's raw WhatsApp message
-
-It returns `{ riskScore, triggeredFlags[], botResponse }`.
-
-The `botResponse` follows strict rules: never opens with "Hi [name], thanks for your message." References the patient's actual words. If green: gives one actionable care tip. If yellow: flags the concern and advises. If red: tells them clearly to seek emergency help immediately.
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Starts the API, Vite, and the dev Mongo fallback when needed |
+| `npm run dev:api` | Starts only the API (requires a reachable MongoDB) |
+| `npm run dev:web` | Starts only the Vite frontend |
+| `npm run build` | Builds frontend and backend |
+| `npm run typecheck` | Type-checks the frontend and compiles the backend |
+| `npm run seed` | Seeds the demo dataset |
+| `npm start` | Runs the compiled backend (`backend/dist/index.js`) |
+| `npm run preview` | Serves the built PWA with `vite preview` |
 
 ---
 
-## API Reference
+## Environment variables
+
+### Backend (`backend/.env`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `PORT` | `4000` | API port |
+| `NODE_ENV` | `development` | Use `production` on a server |
+| `FRONTEND_URL` | `http://localhost:5173` | Comma-separated CORS origins |
+| `MONGODB_URI` | unset | Real MongoDB URI; unset enables the dev fallback |
+| `JWT_SECRET` | dev fallback | Set a long random value in production |
+| `JWT_EXPIRES_IN` | `7d` | Access-token lifetime |
+| `GEMINI_API_KEY` | unset | Without it, triage uses the server rule engine |
+| `SYNC_PAGE_SIZE` | `300` | Maximum records per delta-sync page |
+| `WHATSAPP_ENABLED` | `false` | Set `true` only with Chrome/Chromium available |
+| `WHATSAPP_AUTH_PATH` | `.wwebjs_auth` | Persistent WhatsApp session directory |
+| `WHATSAPP_CHROME_PATH` | unset | Explicit Chrome/Chromium executable |
+
+### Frontend (`frontend/.env`)
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `VITE_API_URL` | empty | Empty uses the Vite proxy in dev. Set to the API origin in production. |
+| `VITE_API_PROXY` | `http://localhost:4000` | Dev proxy target |
+
+---
+
+## How the offline-first model works
+
+### Local writes
+
+Every clinician action is written to IndexedDB first:
+
+1. The entity is updated optimistically.
+2. A mutation is appended to the durable `outbox` table.
+3. An audit entry is appended locally.
+4. The UI re-renders from Dexie via `useLiveQuery`.
+5. The sync loop pushes the outbox when a connection is available.
+
+The local database (`frontend/src/lib/db.ts`) contains:
+
+```text
+patients  checkIns  alerts  notes  outbox  aiQueue  audit  conflicts  meta
+```
+
+### Push then pull
+
+`frontend/src/lib/sync-core.ts` performs:
+
+1. **Push** pending outbox operations in priority order.
+2. **Pull** server changes since the last cursor (`lastSyncAt`).
+3. Merge remote changes, preserving local clinician edits.
+4. Record conflicts locally instead of silently losing work.
+5. Retry transient failures with backoff; reject permanently invalid operations.
+
+Outbox priorities keep clinically urgent work first:
+
+| Operation | Priority |
+| --- | --- |
+| RED alert / critical triage | 100 |
+| Signal approval | 60 |
+| Yellow triage | 40 |
+| Manual WhatsApp message | 35 |
+| Note | 15 |
+| Patient creation | 10 |
+
+### Idempotency and ordering
+
+- Client-generated UUIDs are canonical. MongoDB `_id` is never exposed by the API.
+- The server records every applied operation in a `SyncOperation` ledger keyed by `(doctorId, operationId)`.
+- Replaying an operation returns `duplicate` and does not duplicate data.
+- Out-of-order operations are rejected or retried; they are never silently dropped.
+- Server writes increment `serverVersion`, which drives conflict detection.
+- Clinician-local edits win when versions conflict; the conflict is retained for review.
+
+### Offline AI
+
+- Check-ins can be triaged locally with deterministic rules while offline.
+- Cloud Gemini jobs are queued in `aiQueue` and retried when online.
+- The server always has a rule-based fallback, so a missing `GEMINI_API_KEY` or Gemini outage still produces a RED/YELLOW/GREEN result.
+- Every AI result stores provenance: model, prompt version, generation time, source, and confidence.
+
+### Audit
+
+The PWA keeps an append-only local audit log. The API also records server-side audit entries for clinical writes, triage, alert resolution, signal approval, and WhatsApp queueing. Audit failures never block clinical writes.
+
+---
+
+## WhatsApp pipeline
+
+Patient messages must never be lost. The flow is:
+
+```text
+WhatsApp message
+  → persist InboundMessage
+  → local rule triage (RED fallback)
+  → queue Gemini job if needed
+  → create CheckIn and Alert
+  → recompute patient risk
+  → enqueue outbound reply
+  → durable OutboundMessage sender with retries
+```
+
+Key properties:
+
+- Inbound messages are persisted before triage.
+- Outbound messages are persisted before sending.
+- Sends are idempotent by key and retried with backoff.
+- When `WHATSAPP_ENABLED=false`, messages remain queued instead of being lost.
+- `whatsapp-web.js` uses `LocalAuth`, so the session survives restarts.
+- RED alerts are created locally and synced; they do not depend on Gemini availability.
+
+### Enabling WhatsApp locally
+
+```bash
+# backend/.env
+WHATSAPP_ENABLED=true
+WHATSAPP_CHROME_PATH=/usr/bin/chromium   # or your Chrome path
+```
+
+Then open the WhatsApp screen in the PWA and scan the QR code. If Chrome is unavailable, leave WhatsApp disabled; the rest of the app still works.
+
+The Docker image installs Chromium and sets `WHATSAPP_CHROME_PATH=/usr/bin/chromium`.
+
+---
+
+## API
+
+All routes are under `/v1` and require `Authorization: Bearer <token>` unless noted.
 
 ### Auth
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/v1/auth/login` | Returns access token + sets refresh cookie |
-| `POST` | `/v1/auth/refresh` | Rotates access token from refresh cookie |
-| `POST` | `/v1/auth/logout` | Invalidates refresh token |
-| `GET` | `/v1/doctors/me` | Logged-in doctor profile |
 
-### Patients
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/v1/patients` | List with risk filter, search, pagination |
-| `GET` | `/v1/patients/:id` | Detail with check-ins and alerts |
-| `POST` | `/v1/patients` | Register new patient |
-| `POST` | `/v1/patients/:id/signal` | AI extraction from EMR notes |
-| `PATCH` | `/v1/patients/:id/signal/approve` | Approve signal, dispatch first WhatsApp |
-| `PATCH` | `/v1/patients/:id/risk` | Manual risk override |
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/login` | Email/password login; returns access token and refresh cookie |
+| `POST` | `/auth/refresh` | Rotate the access token |
+| `POST` | `/auth/logout` | Clear the refresh token |
+| `GET` | `/doctors/me` | Current clinician profile |
 
-### Monitoring
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/v1/patients/:id/checkins` | Paginated check-in history |
-| `GET` | `/v1/alerts` | All alerts for logged-in doctor |
-| `PATCH` | `/v1/alerts/:id/resolve` | Resolve an alert |
+### Offline sync
 
-### WhatsApp
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/v1/whatsapp/qr` | QR for initial bot auth |
-| `GET` | `/v1/whatsapp/status` | Bot ready state |
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/sync/push` | Apply an ordered list of client operations idempotently |
+| `GET` | `/sync/pull?since=<iso>` | Pull patients, alerts, check-ins, and notes changed after a cursor |
+
+### Clinical data
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/patients` | List patients (risk/search filters, pagination) |
+| `GET` | `/patients/:id` | Patient detail with check-ins, alerts, and notes |
+| `POST` | `/patients` | Register a patient |
+| `POST` | `/patients/:id/signal` | Extract a signal from raw notes |
+| `PATCH` | `/patients/:id/signal/approve` | Approve a care signal |
+| `PATCH` | `/patients/:id/risk` | Override risk |
+| `GET` | `/patients/:id/checkins` | Check-in history |
+| `GET` | `/patients/:id/notes` | Clinical notes |
+| `POST` | `/patients/:id/notes` | Add a note |
+| `GET` | `/alerts` | List alerts |
+| `PATCH` | `/alerts/:id/resolve` | Resolve an alert |
+
+### AI and WhatsApp
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/ai/triage` | Gemini triage with rule fallback |
+| `GET` | `/whatsapp/status` | Connection state and outbox counts |
+| `GET` | `/whatsapp/qr` | QR code as a data URL |
+| `GET` | `/whatsapp/outbox` | Recent outbound messages |
+| `POST` | `/whatsapp/outbox/:id/retry` | Retry a failed message |
+| `GET` | `/audit` | Server-side audit trail |
+| `GET` | `/health` | Public health check |
 
 ---
 
-## Local Development
+## Project layout
 
-### Prerequisites
-- Node.js 20+, pnpm
-- MongoDB Atlas connection string
-- Google Gemini API key ([aistudio.google.com](https://aistudio.google.com))
-- A WhatsApp number for the bot
-
-### Backend
-```bash
-cd backend
-cp .env.example .env
-# fill in: MONGODB_URI, JWT_SECRET, GEMINI_API_KEY, FRONTEND_URL
-
-pnpm install
-pnpm dev
-# QR code prints in terminal — scan with your WhatsApp to activate the bot
+```text
+toju/
+├── frontend/
+│   ├── src/
+│   │   ├── components/        UI primitives and layout
+│   │   ├── context/           Auth, sync, and network providers
+│   │   ├── hooks/             Live local data and PWA hooks
+│   │   ├── lib/               Dexie schema, repository, sync, AI, audit, API client
+│   │   ├── views/             Login, dashboard, patients, signals, alerts, WhatsApp, audit
+│   │   ├── sw.ts              Custom service worker
+│   │   └── types/             Shared domain and DTO types
+│   ├── vite.config.ts
+│   └── package.json
+├── backend/
+│   ├── src/
+│   │   ├── config/            Env, Mongo connection, dev Mongo fallback
+│   │   ├── controllers/       Auth, patients, sync, AI, notes, audit, WhatsApp
+│   │   ├── jobs/              Daily check-in and missed-check-in cron jobs
+│   │   ├── middleware/        Auth, validation, errors
+│   │   ├── models/            Patient, Alert, CheckIn, Note, audit, sync, messages
+│   │   ├── routes/
+│   │   ├── services/          AI, rules, outbound, WhatsApp, serializers, migrations
+│   │   └── scripts/seed.ts
+│   ├── Dockerfile
+│   └── package.json
+├── scripts/                   Dev bootstrap and seed wrappers
+├── render.yaml
+└── package.json               npm workspace root
 ```
 
-### Frontend
-```bash
-cd frontend
-# create .env.local:
-# NEXT_PUBLIC_API_URL=http://localhost:4000/v1
+---
 
-pnpm install
-pnpm dev
-```
+## Development notes
 
-### Seed
-```bash
-cd backend && pnpm seed
-```
+### Local MongoDB fallback
+
+When `MONGODB_URI` is unset and `NODE_ENV` is not `production`, the API starts a file-backed `mongodb-memory-server` instance. MongoDB 4.4 is used because it runs on older CPUs without AVX. The data directory is `backend/.mongo-data/`, so seeding and restarting the API keep the same data.
+
+The fallback is development-only. Production always requires an explicit `MONGODB_URI`.
+
+### Seed while the API is running
+
+The seed script uses the same fallback URI file (`backend/.mongo-uri`) when it exists, so `npm run seed` can run against the API’s active development database.
+
+### Offline simulation
+
+Use the network controls in the PWA, or stop the API, to verify:
+
+- patients, alerts, notes, and signals still render from IndexedDB
+- edits and notes are queued in the outbox
+- the sync badge shows pending work
+- reconnecting pushes the queue and pulls the delta
+- RED check-ins still create local alerts and rule-based triage results
 
 ---
 
 ## Deployment
 
-### Backend → Railway (required for WhatsApp bot)
-The bot needs a persistent process with a real browser. Serverless platforms (Vercel, Lambda) cannot run it.
+### Docker (API)
 
-1. Connect Railway → GitHub repo, set root to `backend`, builder to Dockerfile
-2. Set env vars: `MONGODB_URI`, `JWT_SECRET`, `GEMINI_API_KEY`, `FRONTEND_URL`, `NODE_ENV=production`, `CHROME_PATH=/usr/bin/chromium`, `JWT_EXPIRES_IN=7d`
-3. Add a persistent disk at `/app/.wwebjs_auth` (stores WhatsApp session across deploys)
-4. After deploy: check Railway logs for the QR code, scan once with your phone
+```bash
+docker build -t toju-api ./backend
+docker run --rm -p 4000:4000 \
+  -e MONGODB_URI="mongodb+srv://..." \
+  -e JWT_SECRET="..." \
+  -e GEMINI_API_KEY="..." \
+  -e FRONTEND_URL="https://your-pwa.example" \
+  toju-api
+```
 
-### Frontend → Vercel
-1. Root directory: `frontend`
-2. Env var: `NEXT_PUBLIC_API_URL=https://your-railway-backend.up.railway.app/v1`
+The image includes Chromium. Set `WHATSAPP_ENABLED=true` and mount a persistent volume at `/app/.wwebjs_auth` to keep the WhatsApp session.
 
----
+### Render
 
-## Roadmap — Closing the Loop Further
+`render.yaml` defines:
 
-The core prevention loop is live. What we build next makes it faster, smarter, and more complete.
+- `toju-api`: Docker web service with a persistent disk for the WhatsApp session
+- `toju-web`: static Vite build served from `frontend/dist`
 
-### Real-time Dashboard Alerts
-Replace 30-second polling with WebSocket. When a patient's message triggers a red risk score, the doctor's dashboard updates in under a second — the patient row flashes red and floats to the top of the table. This is the demo moment: a patient texts "my chest feels tight," and within 2 seconds the doctor sees a red alert without touching their keyboard.
+Set `MONGODB_URI`, `GEMINI_API_KEY`, `FRONTEND_URL`, and `VITE_API_URL` in the Render dashboard.
 
-### Conversation Memory & Trend Detection
-Store the last N check-ins per patient. Feed them to Gemini as context before analysing the next reply. A patient saying "a little tired" once is noise. A patient saying it three days in a row, with a medication that causes fatigue as a warning sign, is a signal. Trend-aware triage cannot be done with a single message — it requires memory.
+### PWA installation
 
-### Multilingual Bot Responses
-The `language` field is already stored on every patient. Prompt Gemini to respond **in the patient's language** — Yoruba, Hausa, Igbo, Pidgin — so the patient receives clinical guidance in the language they think in, not the language of the hospital form. This is critical for informed self-care in communities where English is not the first language.
-
-### Caregiver Escalation Loop
-Many patients are elderly and non-smartphone users. A secondary `caregiverPhone` field: if the patient does not reply within 3 hours of the morning check-in, the bot automatically texts the caregiver — *"[Name] has not responded to today's health check. Please check on them."* The caregiver becomes part of the monitoring network.
-
-### Discharge Summary via WhatsApp
-At the moment of signal approval, generate a patient-friendly one-page discharge summary from the Clinical Signal — medications, what to watch for, emergency contact — and deliver it as a PDF directly to the patient's WhatsApp. The patient leaves the hospital with their full discharge instructions in their pocket, in their language.
-
-### Doctor Mobile Dashboard
-Alerts on a desktop the doctor isn't sitting at are useless. A responsive mobile-first alert view so doctors can review and resolve red-flag notifications from their phone while on rounds.
+The production build includes a manifest and service worker. On Android, use **Install app** in Chrome. On iOS Safari, use **Share → Add to Home Screen**. The app shell and previously loaded data remain available offline.
 
 ---
 
-## The Hackathon Case
+## Verification checklist
 
-**Theme: Data to Prevention**
+```bash
+npm install
+npm run typecheck
+npm run build
+npm run seed
+npm run dev
+```
 
-The EMR system already contains the clinical intelligence doctors spend years learning. It describes exactly what this patient's danger signs are. Toju extracts that intelligence from text, converts it into a monitoring protocol, and then acts on it — automatically, at scale, with no additional doctor time.
+Then check:
 
-The data was always there. Toju is the system that puts it to work.
-
-**Theme: AI as a Partner**
-
-Gemini does not replace clinical judgment — it extends it. The doctor defines the red flags. The doctor approves the signal. The AI then applies that clinical judgment at 3 AM on a weekend when the doctor is not available, reading a patient's WhatsApp message and knowing — based on what that specific doctor said at discharge — whether "chest tightness" in this patient, on this medication, with this diagnosis, is an emergency.
-
-That is AI as a clinical partner.
-
----
-
-## Impact at Scale
-
-A hospital discharging 50 patients per week — with Toju:
-
-| Metric | Without Toju | With Toju |
-|---|---|---|
-| Post-discharge contact rate | ~0% | 100% (automated) |
-| Red-flag detection time | Days (readmission) | Hours (reply analysis) |
-| Doctor time per monitored patient | 15 min follow-up call | 30 sec alert review |
-| Missed check-in visibility | Never | Same morning, automated |
-| Language accessibility | Low | 5 Nigerian languages |
-| Infrastructure cost | Call centre + nurses | One WhatsApp number |
-| Data generated per patient | None | Full check-in history, risk trend, triggered flags |
-
-Every check-in reply is a data point. Aggregated across a hospital, this is the first dataset that shows what actually happens to patients after they go home — and where the care system is failing them.
+- `http://localhost:4000/health` returns `{ "ok": true }`
+- login with the demo credentials
+- `GET /v1/sync/pull` returns the seeded patients, alerts, check-ins, and notes
+- repeating a `POST /v1/sync/push` operation returns `duplicate`
+- `/v1/ai/triage` returns RED with `server-fallback` provenance when `GEMINI_API_KEY` is unset
+- `/v1/whatsapp/outbox` shows queued messages while WhatsApp is disabled
+- `frontend/dist/sw.js` exists after `npm run build`
 
 ---
 
-## License
+## Known limitations
 
-MIT
+- The dev MongoDB fallback downloads a MongoDB binary on first use. Production deployments should use a managed MongoDB or a local `mongod`.
+- WhatsApp Web automation is inherently best-effort and depends on WhatsApp Web behavior. The durable outbox protects messages from loss, but delivery still requires a linked session.
+- Gemini calls require network access and a valid API key. The deterministic rule engine is the safety net, not a replacement for clinician review.
+- Local-first conflicts are preserved and marked; they are not automatically merged field-by-field.
