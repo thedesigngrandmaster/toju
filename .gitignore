@@ -34,11 +34,11 @@ yarn-error.log*
 # vercel / render
 .vercel
 
-# WhatsApp Web.js session and cache data
+# WhatsApp Web.js session and cache data (legacy worker only)
 backend/.wwebjs_auth/
 backend/.wwebjs_cache/
 
-# Local development database fallback
+# Legacy MongoDB development fallback artifacts (no longer used)
 backend/.mongo-data/
 backend/.mongo-uri
 backend/.mongo-libs/

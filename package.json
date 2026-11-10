@@ -16,6 +16,7 @@
     "build:web": "npm run build --workspace frontend",
     "build:api": "npm run build --workspace backend",
     "typecheck": "npm run typecheck --workspace frontend && npm run build --workspace backend",
+    "migrate": "npm run migrate --workspace backend",
     "seed": "node scripts/seed.mjs",
     "start": "npm run start --workspace backend",
     "preview": "npm run preview --workspace frontend",

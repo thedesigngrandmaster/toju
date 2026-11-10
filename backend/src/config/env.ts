@@ -9,6 +9,7 @@ function numberFromEnv(value: string | undefined, fallback: number): number {
 export const env = {
   port: numberFromEnv(process.env.PORT, 4000),
   nodeEnv: process.env.NODE_ENV || 'development',
+  databaseUrl: process.env.DATABASE_URL || process.env.POSTGRES_URL || '',
   mongoUri: process.env.MONGODB_URI || '',
   jwtSecret: process.env.JWT_SECRET || 'dev_secret',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
