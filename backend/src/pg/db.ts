@@ -1,5 +1,11 @@
+import dns from 'node:dns'
 import { Pool, type QueryResultRow } from 'pg'
 import { env } from '../config/env'
+
+// Neon's hostname resolves to several IPv4 and IPv6 addresses. Some networks
+// black-hole the IPv6 route, which makes the first connection wait for the
+// happy-eyeballs fallback. Prefer IPv4 to keep cold starts predictable.
+dns.setDefaultResultOrder('ipv4first')
 
 const connectionString = env.databaseUrl
 
@@ -16,6 +22,8 @@ export const pool = new Pool({
   max: Number(process.env.PG_POOL_MAX || 5),
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 30_000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 })
 
 pool.on('error', (error) => {
